@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft, Plus, Edit, Trash2, X } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, X, FileText } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -54,6 +54,8 @@ export default function DetalleRegistroPage() {
   const [showSecundarioForm, setShowSecundarioForm] = useState<number | null>(null);
   const [editingSecundarioId, setEditingSecundarioId] = useState<number | null>(null);
   const [secundarioFormData, setSecundarioFormData] = useState<Record<string, any>>({});
+  const [archivosSecundarios, setArchivosSecundarios] = useState<Record<string, File>>({});
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -185,14 +187,47 @@ export default function DetalleRegistroPage() {
     }
 
     try {
+      setUploadingFiles(true);
       const token = localStorage.getItem("token");
+      
+      // Primero, subir los archivos si hay alguno
+      const dataToSend = { ...secundarioFormData };
+      
+      for (const [nombreCampo, archivo] of Object.entries(archivosSecundarios)) {
+        if (archivo) {
+          toast({
+            title: "Subiendo archivo...",
+            description: `Subiendo ${archivo.name}`,
+          });
+
+          const formDataUpload = new FormData();
+          formDataUpload.append('file', archivo);
+          formDataUpload.append('moduloNombre', moduloSec.Nombre);
+
+          const uploadResponse = await fetch('/api/documentos/upload', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formDataUpload,
+          });
+
+          const uploadResult = await uploadResponse.json();
+          
+          if (uploadResult.success) {
+            // Guardar el ID del documento en lugar del nombre
+            dataToSend[nombreCampo] = uploadResult.documentId;
+          } else {
+            throw new Error(`Error al subir ${archivo.name}: ${uploadResult.error}`);
+          }
+        }
+      }
+
+      setUploadingFiles(false);
       
       // Agregar el ID del registro principal como FK
       // El nombre de la columna FK es el NombreTabla del módulo principal + _Id
-      const dataToSend = {
-        ...secundarioFormData,
-        [`${modulo?.NombreTabla}_Id`]: parseInt(registroId),
-      };
+      dataToSend[`${modulo?.NombreTabla}_Id`] = parseInt(registroId);
 
       console.log('Datos a enviar:', dataToSend);
       console.log('Columna FK:', `${modulo?.NombreTabla}_Id`);
@@ -229,13 +264,15 @@ export default function DetalleRegistroPage() {
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error:", error);
       toast({
         title: "Error",
-        description: "Error al guardar el registro",
+        description: error.message || "Error al guardar el registro",
         variant: "destructive",
       });
+    } finally {
+      setUploadingFiles(false);
     }
   };
 
@@ -304,6 +341,7 @@ export default function DetalleRegistroPage() {
       initialData[campo.Nombre] = "";
     });
     setSecundarioFormData(initialData);
+    setArchivosSecundarios({});
     setEditingSecundarioId(null);
   };
 
@@ -383,6 +421,34 @@ export default function DetalleRegistroPage() {
           </select>
         );
 
+      case "Archivo":
+        return (
+          <div className="space-y-2">
+            <input
+              type="file"
+              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setArchivosSecundarios({ ...archivosSecundarios, [campo.Nombre]: file });
+                  onChange(campo.Nombre, file.name);
+                }
+              }}
+              required={campo.Obligatorio && !value && !archivosSecundarios[campo.Nombre]}
+            />
+            {value && !archivosSecundarios[campo.Nombre] && (
+              <div className="text-sm text-gray-600">
+                Archivo actual: {value}
+              </div>
+            )}
+            {archivosSecundarios[campo.Nombre] && (
+              <div className="text-sm text-green-600">
+                Nuevo archivo: {archivosSecundarios[campo.Nombre].name}
+              </div>
+            )}
+          </div>
+        );
+
       default:
         return (
           <input
@@ -411,6 +477,44 @@ export default function DetalleRegistroPage() {
           return valorObj ? valorObj.Valor : value;
         }
         return value;
+      case "Archivo":
+        if (value) {
+          return (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem("token");
+                  const response = await fetch(`/api/documentos/viewer?documentId=${value}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  const data = await response.json();
+                  if (data.success) {
+                    window.open(data.viewerUrl, '_blank');
+                  } else {
+                    toast({
+                      title: "Error",
+                      description: "No se pudo abrir el archivo",
+                      variant: "destructive",
+                    });
+                  }
+                } catch (error) {
+                  console.error("Error:", error);
+                  toast({
+                    title: "Error",
+                    description: "Error al abrir el archivo",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              Ver
+            </Button>
+          );
+        }
+        return "-";
       default:
         return value;
     }
@@ -541,11 +645,14 @@ export default function DetalleRegistroPage() {
                           setEditingSecundarioId(null);
                           resetSecundarioForm(moduloSec.Campos);
                         }}
+                        disabled={uploadingFiles}
                       >
                         Cancelar
                       </Button>
-                      <Button type="submit">
-                        {editingSecundarioId ? "Actualizar" : "Guardar"}
+                      <Button type="submit" disabled={uploadingFiles}>
+                        {uploadingFiles 
+                          ? "Subiendo archivos..." 
+                          : (editingSecundarioId ? "Actualizar" : "Guardar")}
                       </Button>
                     </div>
                   </form>

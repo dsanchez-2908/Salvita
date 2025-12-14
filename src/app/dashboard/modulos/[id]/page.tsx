@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { Plus, Edit, Trash2, X, Eye, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Edit, Trash2, X, Eye, Search, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import { Label } from "@/components/ui/label";
 
 interface Campo {
@@ -43,6 +43,8 @@ export default function ModuloDinamicoPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [archivos, setArchivos] = useState<Record<string, File>>({});
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const recordsPerPage = 10;
@@ -139,10 +141,48 @@ export default function ModuloDinamicoPage() {
     }
 
     try {
+      setUploadingFiles(true);
       const token = localStorage.getItem("token");
+      
+      // Primero, subir los archivos si hay alguno
+      const dataToSave = { ...formData };
+      
+      for (const [nombreCampo, archivo] of Object.entries(archivos)) {
+        if (archivo) {
+          toast({
+            title: "Subiendo archivo...",
+            description: `Subiendo ${archivo.name}`,
+          });
+
+          const formDataUpload = new FormData();
+          formDataUpload.append('file', archivo);
+          formDataUpload.append('moduloNombre', modulo?.Nombre || '');
+
+          const uploadResponse = await fetch('/api/documentos/upload', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formDataUpload,
+          });
+
+          const uploadResult = await uploadResponse.json();
+          
+          if (uploadResult.success) {
+            // Guardar el ID del documento en lugar del nombre
+            dataToSave[nombreCampo] = uploadResult.documentId;
+          } else {
+            throw new Error(`Error al subir ${archivo.name}: ${uploadResult.error}`);
+          }
+        }
+      }
+
+      setUploadingFiles(false);
+
+      // Ahora guardar el registro con los IDs de documentos
       const url = `/api/modulos/${moduloId}/datos`;
       const method = editingId ? "PUT" : "POST";
-      const body = editingId ? { ...formData, id: editingId } : formData;
+      const body = editingId ? { ...dataToSave, id: editingId } : dataToSave;
 
       const response = await fetch(url, {
         method,
@@ -170,13 +210,15 @@ export default function ModuloDinamicoPage() {
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error:", error);
       toast({
         title: "Error",
-        description: "Error al guardar el registro",
+        description: error.message || "Error al guardar el registro",
         variant: "destructive",
       });
+    } finally {
+      setUploadingFiles(false);
     }
   };
 
@@ -239,6 +281,7 @@ export default function ModuloDinamicoPage() {
       initialData[campo.Nombre] = "";
     });
     setFormData(initialData);
+    setArchivos({});
     setEditingId(null);
   };
 
@@ -352,19 +395,31 @@ export default function ModuloDinamicoPage() {
 
       case "Archivo":
         return (
-          <input
-            type="file"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
-            onChange={(e) => {
-              // Por ahora solo guardamos el nombre del archivo
-              // En el futuro aquí manejaremos la subida real
-              const file = e.target.files?.[0];
-              if (file) {
-                setFormData({ ...formData, [campo.Nombre]: file.name });
-              }
-            }}
-            required={campo.Obligatorio && !value}
-          />
+          <div className="space-y-2">
+            <input
+              type="file"
+              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  // Guardar el archivo en el estado para subirlo después
+                  setArchivos({ ...archivos, [campo.Nombre]: file });
+                  setFormData({ ...formData, [campo.Nombre]: file.name });
+                }
+              }}
+              required={campo.Obligatorio && !value && !archivos[campo.Nombre]}
+            />
+            {value && !archivos[campo.Nombre] && (
+              <div className="text-sm text-gray-600">
+                Archivo actual: {value}
+              </div>
+            )}
+            {archivos[campo.Nombre] && (
+              <div className="text-sm text-green-600">
+                Nuevo archivo: {archivos[campo.Nombre].name}
+              </div>
+            )}
+          </div>
         );
 
       default:
@@ -397,6 +452,44 @@ export default function ModuloDinamicoPage() {
           return valorObj ? valorObj.Valor : value;
         }
         return value;
+      case "Archivo":
+        if (value) {
+          return (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem("token");
+                  const response = await fetch(`/api/documentos/viewer?documentId=${value}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  const data = await response.json();
+                  if (data.success) {
+                    window.open(data.viewerUrl, '_blank');
+                  } else {
+                    toast({
+                      title: "Error",
+                      description: "No se pudo abrir el archivo",
+                      variant: "destructive",
+                    });
+                  }
+                } catch (error) {
+                  console.error("Error:", error);
+                  toast({
+                    title: "Error",
+                    description: "Error al abrir el archivo",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              Ver
+            </Button>
+          );
+        }
+        return "-";
       default:
         return value;
     }
@@ -507,11 +600,14 @@ export default function ModuloDinamicoPage() {
                   setEditingId(null);
                   resetForm();
                 }}
+                disabled={uploadingFiles}
               >
                 Cancelar
               </Button>
-              <Button type="submit">
-                {editingId ? "Actualizar" : "Guardar"}
+              <Button type="submit" disabled={uploadingFiles}>
+                {uploadingFiles 
+                  ? "Subiendo archivos..." 
+                  : (editingId ? "Actualizar" : "Guardar")}
               </Button>
             </div>
           </form>
