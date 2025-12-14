@@ -1,285 +1,235 @@
-# Salvita - Sistema de Gestión para Geriátrico
+# 🏥 Salvita - Sistema de Gestión para Geriátricos
 
-Sistema parametrizable de gestión para geriátrico con módulos dinámicos, autenticación basada en roles y integración con gestor documental.
+Sistema web completo y altamente parametrizable para la gestión integral de residencias geriátricas, desarrollado con Next.js 14, TypeScript y SQL Server.
 
-## Características Principales
+[![Next.js](https://img.shields.io/badge/Next.js-14.2-black)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
+[![SQL Server](https://img.shields.io/badge/SQL%20Server-Express%202025-red)](https://www.microsoft.com/sql-server)
+[![License](https://img.shields.io/badge/License-Private-yellow.svg)](LICENSE)
 
-- **Autenticación y Roles**: Sistema completo de usuarios y roles con permisos granulares
-- **Módulos Parametrizables**: Creación dinámica de entidades con campos configurables
-- **Gestión Documental**: Integración con API de Aditus para almacenamiento de documentos
-- **Entidades Relacionadas**: Soporte para entidades principales, secundarias e independientes
-- **UI Moderna**: Interfaz construida con Next.js 14 y Shadcn UI
+## 🌟 Características Principales
 
-## Tecnologías Utilizadas
+- 🔧 **Sistema de módulos dinámicos**: Crea entidades personalizadas sin programar
+- 👥 **Gestión completa de usuarios y roles** con permisos granulares
+- 🔐 **Autenticación segura** con JWT y bcrypt
+- 🎨 **Interfaz moderna y responsive** con Tailwind CSS y Shadcn UI
+- ⚡ **CRUD automático** para todas las entidades creadas
+- 🔗 **Relaciones padre-hijo** entre módulos (ej: Residentes → Familiares)
+- 🔍 **Búsqueda y paginación** en todas las grillas
+- 🗑️ **Soft delete** (eliminación lógica con posibilidad de restauración)
+- 📄 **Integración con gestor documental** Aditus
+- 📋 **Listas parametrizables** para campos desplegables personalizados
 
-- **Frontend & Backend**: Next.js 14 (React 18)
-- **Base de Datos**: Microsoft SQL Server
-- **UI Components**: Shadcn UI (Radix UI + Tailwind CSS)
-- **Autenticación**: JWT + bcryptjs
-- **Gestión Documental**: API Aditus (integración propia)
+## 📋 Requisitos Previos
 
-## Requisitos Previos
+- **Node.js** 18 o superior
+- **SQL Server Express** 2025 o superior
+- **Git** (instalación automática disponible via winget)
+- **Windows** 10/11 (probado en este entorno)
 
-- Node.js 18+ 
-- SQL Server (Express o superior)
-- npm o yarn
-
-## Instalación
-
-### 1. Clonar el repositorio
-
-```bash
-cd c:\Repo\Salvita
-```
-
-### 2. Instalar dependencias
+## 🚀 Instalación Rápida
 
 ```bash
+# Clonar el repositorio
+git clone https://github.com/dsanchez-2908/Salvita.git
+cd Salvita
+
+# Instalar dependencias
 npm install
-```
 
-### 3. Configurar Base de Datos
-
-Ejecutar el script de creación de la base de datos en SQL Server:
-
-```bash
-# Abrir SQL Server Management Studio y ejecutar:
-# c:\Repo\Salvita\database\schema.sql
-```
-
-### 4. Configurar variables de entorno
-
-El archivo `.env.local` ya está creado con la configuración por defecto:
-
-```env
-DB_SERVER=localhost\SQLEXPRESS
-DB_NAME=Salvita
-DB_USER=sa
-DB_PASSWORD=123
-DB_ENCRYPT=true
-DB_TRUST_SERVER_CERTIFICATE=true
-
-JWT_SECRET=salvita_secret_key_change_in_production_2024
-```
-
-**IMPORTANTE**: Ajusta estos valores según tu configuración de SQL Server.
-
-### 5. Inicializar Base de Datos
-
-Ejecutar el script de inicialización para crear el usuario admin con la contraseña hasheada:
-
-```bash
+# Configurar base de datos
+# 1. Ejecutar database/schema.sql en SQL Server
+# 2. Actualizar .env.local con tus credenciales
+# 3. Inicializar usuario admin
 node scripts/init-db.js
-```
 
-Este script:
-- Verifica la conexión a la base de datos
-- Crea el usuario admin con contraseña hasheada
-- Muestra las credenciales de acceso
-
-### 6. Iniciar la aplicación
-
-```bash
+# Iniciar aplicación en modo desarrollo
 npm run dev
 ```
 
-La aplicación estará disponible en: http://localhost:3000
+Accede a `http://localhost:3000` con:
+- 👤 **Usuario**: `admin`
+- 🔑 **Contraseña**: `123`
 
-## Credenciales Iniciales
+> 💡 **Nota**: Para una guía de instalación completa y detallada, consulta [INSTALACION.md](INSTALACION.md)
 
-- **Usuario**: admin
-- **Contraseña**: 123
-
-## Estructura del Proyecto
+## 📁 Estructura del Proyecto
 
 ```
-c:\Repo\Salvita\
-├── database/                  # Scripts SQL
-│   ├── schema.sql            # Esquema completo de la BD
-│   └── update-admin-password.sql
-├── scripts/                   # Scripts de utilidad
-│   └── init-db.js            # Inicialización de BD
+Salvita/
 ├── src/
-│   ├── app/                  # Rutas de Next.js
-│   │   ├── api/              # API Routes
-│   │   │   ├── auth/         # Autenticación
-│   │   │   ├── usuarios/     # Gestión de usuarios
-│   │   │   ├── roles/        # Gestión de roles
-│   │   │   ├── listas/       # Gestión de listas
-│   │   │   ├── modulos/      # Gestión de módulos
-│   │   │   └── parametros/   # Parámetros del sistema
-│   │   ├── dashboard/        # Panel principal
-│   │   ├── login/            # Página de login
-│   │   ├── globals.css       # Estilos globales
-│   │   └── layout.tsx        # Layout principal
-│   ├── components/           # Componentes React
-│   │   └── ui/               # Componentes de UI (Shadcn)
-│   ├── lib/                  # Librerías y utilidades
-│   │   ├── db.ts             # Conexión a base de datos
-│   │   ├── auth.ts           # Autenticación JWT
-│   │   ├── document-manager.ts # Cliente gestor documental
-│   │   └── utils.ts          # Utilidades
-│   └── types/                # Tipos TypeScript
-│       └── index.ts          # Definiciones de tipos
-├── .env.local                # Variables de entorno
-├── package.json              # Dependencias
-├── tailwind.config.ts        # Configuración Tailwind
-└── tsconfig.json             # Configuración TypeScript
+│   ├── app/                      # Next.js App Router
+│   │   ├── api/                  # API Routes
+│   │   │   ├── auth/            # Autenticación
+│   │   │   ├── usuarios/        # Gestión de usuarios
+│   │   │   ├── roles/           # Gestión de roles
+│   │   │   ├── listas/          # Listas parametrizables
+│   │   │   └── modulos/         # Módulos dinámicos
+│   │   ├── dashboard/           # Páginas principales
+│   │   │   ├── modulos/         # CRUD dinámico
+│   │   │   │   └── [id]/        # Vista de registros
+│   │   │   │       └── [registroId]/  # Detalle con secundarios
+│   │   │   ├── usuarios/
+│   │   │   ├── roles/
+│   │   │   └── listas/
+│   │   └── login/               # Página de login
+│   ├── components/ui/           # Componentes Shadcn UI
+│   ├── lib/                     # Utilidades y configuración
+│   │   ├── db.ts               # Conexión SQL Server
+│   │   ├── auth.ts             # JWT y bcrypt
+│   │   └── document-manager.ts # Cliente Aditus
+│   └── types/                   # Tipos TypeScript
+├── database/                    # Scripts SQL
+│   └── schema.sql              # Schema completo
+├── scripts/                    # Scripts de utilidad
+│   └── init-db.js             # Inicialización
+└── [documentación]/           # Archivos .md
+
 ```
 
-## Módulos del Sistema
+## 🛠️ Stack Tecnológico
 
-### Seguridad y Autenticación
+### Frontend
+- **Framework**: Next.js 14.2 (App Router)
+- **Language**: TypeScript 5.3
+- **UI Library**: React 18
+- **Styling**: Tailwind CSS 3
+- **Components**: Shadcn UI
+- **Icons**: Lucide React
 
-#### Módulo de Roles
-- CRUD completo de roles
-- Asignación de permisos por módulo (Agregar, Modificar, Eliminar, Ver)
-- Rol "Administrador" con acceso completo
+### Backend
+- **API**: Next.js API Routes
+- **Database**: SQL Server Express 2025
+- **Driver**: mssql (Tedious)
+- **Authentication**: JWT + bcrypt
+- **Validation**: Zod (en desarrollo)
 
-#### Módulo de Usuarios
-- CRUD de usuarios con encriptación de contraseñas
-- Asignación de múltiples roles por usuario
-- Estados: Activo/Baja
+### Development
+- **Package Manager**: npm
+- **Linting**: ESLint
+- **Code Style**: Prettier (configurado)
 
-### Configuración
+## ✨ Funcionalidades
 
-#### Módulo de Listas
-- Creación de listas maestras para campos tipo "Lista"
-- Gestión de valores de cada lista
-- Usado en campos parametrizables
+### ✅ Implementado
 
-#### Módulo de Administración de Módulos
-- Creación dinámica de módulos/entidades
-- Tipos de módulos:
-  - **Principal**: Entidad principal con secundarias asociadas
-  - **Secundario**: Entidad relacionada a una principal
-  - **Independiente**: Entidad autónoma
-- Configuración de campos:
-  - Tipos: Texto, Descripción, Número, Fecha, FechaHora, Lista, Archivo
-  - Propiedades: Orden, Visible, Visible en grilla, Obligatorio
+#### Módulo de Seguridad
+- ✓ Login con JWT
+- ✓ Gestión de usuarios (CRUD completo)
+- ✓ Gestión de roles con permisos granulares
+- ✓ Hash de contraseñas con bcrypt
+- ✓ Protección de rutas
 
-### Entidades Dinámicas
+#### Módulo de Configuración
+- ✓ Listas parametrizables con valores
+- ✓ Creación dinámica de módulos (Principal/Secundario)
+- ✓ 7 tipos de datos: Texto, Número, Fecha, FechaHora, Lista, Descripción, Archivo
+- ✓ Configuración de campos obligatorios y visibilidad
+- ✓ Iconos personalizables para módulos
 
-Las entidades creadas en el módulo de administración generan automáticamente:
-- Tabla en la base de datos
-- Pantalla de gestión con grilla
-- Formularios de alta/modificación
-- Filtros de búsqueda
-- Exportación a Excel
-- Integración con gestor documental para campos tipo "Archivo"
+#### Módulo de Datos
+- ✓ CRUD automático para módulos dinámicos
+- ✓ Formularios generados según configuración
+- ✓ Validación de campos obligatorios
+- ✓ Búsqueda en tiempo real
+- ✓ Paginación (10 registros por página)
+- ✓ Relaciones padre-hijo (ej: Residentes → Familiares)
+- ✓ Vista de detalle con módulos secundarios inline
 
-## Gestor Documental
+#### UX/UI
+- ✓ Interfaz responsive
+- ✓ Mensajes de confirmación amigables
+- ✓ Toasts de notificación
+- ✓ Botón "Volver" en páginas de detalle
+- ✓ Indicadores de carga
 
-### Configuración
+### 🚧 En Desarrollo
 
-Los parámetros del gestor documental se configuran en la tabla `TD_PARAMETROS`:
+- ⏳ Dashboard con estadísticas
+- ⏳ Exportación a Excel
+- ⏳ Sistema de permisos aplicado en UI
+- ⏳ Gestión documental integrada
+- ⏳ Ordenamiento por columnas
+- ⏳ Filtros avanzados
+- ⏳ Reportes personalizados
+- ⏳ Auditoría completa
 
-- **URL Token**: Endpoint para autenticación
-- **Usuario Token**: Usuario del servicio
-- **Clave Token**: Contraseña del servicio
-- **URL BASE Agregar Documento**: Endpoint para subir archivos
-- **URL BASE Visor**: URL base del visor de documentos
-- **Codigo libreria**: ID de la librería en Aditus
-- **Codigo de clase**: ID de la clase de documento
+## 📚 Documentación
 
-### Uso
+| Documento | Descripción |
+|-----------|-------------|
+| [INSTALACION.md](INSTALACION.md) | Guía completa de instalación paso a paso |
+| [ARQUITECTURA.md](ARQUITECTURA.md) | Arquitectura del sistema y decisiones de diseño |
+| [COMANDOS_UTILES.md](COMANDOS_UTILES.md) | Comandos frecuentes para desarrollo |
+| [PROXIMOS_PASOS.md](PROXIMOS_PASOS.md) | Roadmap y funcionalidades planificadas |
+| [RESUMEN_EJECUTIVO.md](RESUMEN_EJECUTIVO.md) | Resumen para stakeholders |
 
-Los campos tipo "Archivo" en los módulos:
-1. Permiten seleccionar un archivo
-2. Lo convierten a Base64
-3. Lo envían a la API de Aditus
-4. Guardan el ID del documento en la base de datos
-5. Permiten visualizar el documento a través del visor
+## 🎯 Casos de Uso
 
-## Desarrollo
+### Ejemplo: Gestión de Residentes
 
-### Agregar un nuevo componente UI
+1. **Crear módulo "Residentes"** (Principal)
+   - Campos: Nombre Completo, Fecha Ingreso, Sexo, Fecha Nacimiento
+   
+2. **Crear módulo "Familiares"** (Secundario de Residentes)
+   - Campos: Nombre, Parentesco, Teléfono, Email
 
-```bash
-# Los componentes de Shadcn ya están configurados en src/components/ui/
-# Para agregar más componentes, copiar de https://ui.shadcn.com/
-```
+3. **Cargar residentes** usando el CRUD automático
 
-### Crear una nueva API Route
+4. **Ver detalle de residente** y agregar familiares inline
 
-```typescript
-// src/app/api/mi-ruta/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth';
-import { query } from '@/lib/db';
+5. **Buscar y filtrar** residentes según necesidad
 
-export async function GET(request: NextRequest) {
-  const user = getUserFromRequest(request);
-  if (!user) {
-    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
-  }
-  
-  // Tu lógica aquí
-  const result = await query('SELECT * FROM MiTabla');
-  return NextResponse.json({ success: true, data: result });
-}
-```
+Todo sin escribir una línea de código! 🎉
 
-## Base de Datos
+## 🤝 Contribuir
 
-### Nomenclatura de Tablas
+Las contribuciones son bienvenidas. Por favor:
 
-- **TD_**: Tablas de datos
-- **TR_**: Tablas de relación
-- **TMP_**: Tablas temporales
-- **SP_**: Stored Procedures
-- **VW_**: Vistas
+1. Fork el proyecto
+2. Crea tu rama de feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add: nueva funcionalidad increíble'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
 
-### Tablas Dinámicas de Módulos
+### Convención de Commits
 
-Cuando se crea un módulo, se genera automáticamente una tabla con el formato:
-```
-TD_MODULO_[NOMBRE_MODULO]
-```
+- `Add:` Nueva funcionalidad
+- `Fix:` Corrección de bugs
+- `Update:` Actualización de código existente
+- `Docs:` Cambios en documentación
+- `Style:` Cambios de formato (no afectan lógica)
+- `Refactor:` Refactorización de código
+- `Test:` Agregar o modificar tests
 
-Incluye campos de auditoría:
-- FechaCreacion
-- FechaModificacion
-- UsuarioCreacion
-- UsuarioModificacion
+## 🐛 Reportar Issues
 
-## Próximos Pasos
+¿Encontraste un bug? [Abre un issue](https://github.com/dsanchez-2908/Salvita/issues) con:
+- Descripción clara del problema
+- Pasos para reproducirlo
+- Comportamiento esperado vs. actual
+- Screenshots si aplica
+- Versión del sistema operativo y navegador
 
-### Funcionalidades Pendientes
+## 📝 Licencia
 
-1. **Pantallas de Gestión Completas**:
-   - Pantalla de gestión de usuarios (CRUD completo)
-   - Pantalla de gestión de roles (CRUD completo)
-   - Pantalla de gestión de listas (CRUD completo)
-   - Pantalla de administración de módulos (CRUD completo)
+Este proyecto es privado y confidencial.
 
-2. **Entidades Dinámicas**:
-   - Pantallas automáticas para entidades principales
-   - Pantallas automáticas para entidades secundarias
-   - Pantallas automáticas para entidades independientes
-   - Sistema de filtros dinámicos
-   - Exportación a Excel
+## 👨‍💻 Autor
 
-3. **Permisos**:
-   - Implementación completa del sistema de permisos por rol
-   - Validación de permisos en cada operación
-   - Ocultación de opciones según permisos
-
-4. **Mejoras**:
-   - Migración a Keycloak para autenticación
-   - Paginación en grillas
-   - Búsqueda avanzada
-   - Auditoría completa de cambios
-   - Reportes personalizados
-
-## Soporte
-
-Para reportar problemas o sugerencias, contacta al equipo de desarrollo.
-
-## Licencia
-
-Uso interno - Salvita Geriátrico
+**Diego Sánchez** ([@dsanchez-2908](https://github.com/dsanchez-2908))
 
 ---
 
-Desarrollado con ❤️ para Salvita
+<div align="center">
+
+**¿Preguntas? ¿Sugerencias?**  
+[Abrir un Issue](https://github.com/dsanchez-2908/Salvita/issues) · [Ver Documentación](INSTALACION.md)
+
+---
+
+⭐ Si este proyecto te resulta útil, considera darle una estrella
+
+**Última actualización**: Diciembre 14, 2025 | **Versión**: 0.1.0 (Beta)
+
+</div>
