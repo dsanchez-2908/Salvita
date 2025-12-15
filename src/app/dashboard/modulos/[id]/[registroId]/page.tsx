@@ -128,21 +128,19 @@ export default function DetalleRegistroPage() {
   const loadValoresListas = async (listasIds: number[]) => {
     try {
       const token = localStorage.getItem("token");
-      const valores: Record<number, any[]> = { ...valoresListas };
+      const valoresNuevos: Record<number, any[]> = {};
 
       for (const listaId of listasIds) {
-        if (!valores[listaId]) {
-          const response = await fetch(`/api/listas/${listaId}/valores`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const data = await response.json();
-          if (data.success) {
-            valores[listaId] = data.data;
-          }
+        const response = await fetch(`/api/listas/${listaId}/valores`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (data.success) {
+          valoresNuevos[listaId] = data.data;
         }
       }
 
-      setValoresListas(valores);
+      setValoresListas(prev => ({ ...prev, ...valoresNuevos }));
     } catch (error) {
       console.error("Error cargando valores de listas:", error);
     }

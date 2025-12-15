@@ -102,7 +102,14 @@ class DocumentManagerClient {
         contentType: contentType,
       };
 
-      const response = await axios.post<DocumentUploadResponse>(
+      console.log('=== DEBUG UPLOAD ===');
+      console.log('URL:', urlBase);
+      console.log('Librería:', libreria);
+      console.log('Código clase:', codigoClase);
+      console.log('Módulo:', moduloNombre);
+      console.log('Nombre archivo:', fileName);
+
+      const response = await axios.post(
         urlBase,
         requestData,
         {
@@ -115,13 +122,27 @@ class DocumentManagerClient {
         }
       );
 
-      if (!response.data.id) {
+      console.log('=== RESPONSE ===');
+      console.log('Status:', response.status);
+      console.log('Data completa:', JSON.stringify(response.data, null, 2));
+      console.log('Type of response.data:', typeof response.data);
+
+      // Aditus retorna el ID directamente como string, no como objeto
+      const documentId = typeof response.data === 'string' 
+        ? response.data.replace(/"/g, '') // Remover comillas si las hay
+        : response.data.id || response.data;
+
+      if (!documentId) {
+        console.error('⚠️ No se encontró ID en la respuesta');
         throw new Error('No se recibió ID del documento');
       }
 
-      return response.data.id;
+      console.log('✅ ID del documento:', documentId);
+      return documentId;
     } catch (error: any) {
-      console.error('Error subiendo documento:', error.response?.data || error);
+      console.error('❌ Error subiendo documento:', error.response?.data || error);
+      console.error('Error status:', error.response?.status);
+      console.error('Error headers:', error.response?.headers);
       throw new Error(
         `Error al subir el documento: ${error.response?.data?.message || error.message}`
       );
