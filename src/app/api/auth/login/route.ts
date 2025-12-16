@@ -18,13 +18,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Buscar usuario
+    // Buscar usuario (sin filtrar por estado primero)
     const usuarios = await query<Usuario>(
       `SELECT u.*, r.Nombre as RolNombre
        FROM TD_USUARIOS u
        LEFT JOIN TR_USUARIO_ROL ur ON u.Id = ur.UsuarioId
        LEFT JOIN TD_ROLES r ON ur.RolId = r.Id
-       WHERE u.Usuario = @usuario AND u.Estado = 'Activo'`,
+       WHERE u.Usuario = @usuario`,
       { usuario }
     );
 
@@ -39,6 +39,17 @@ export async function POST(request: NextRequest) {
     }
 
     const user = usuarios[0];
+
+    // Verificar si el usuario está inactivo
+    if (user.Estado !== 'Activo') {
+      return NextResponse.json<ApiResponse>(
+        {
+          success: false,
+          error: 'Usuario inactivo. Contacte al administrador del sistema.',
+        },
+        { status: 403 }
+      );
+    }
 
     // Verificar contraseña
     const isValidPassword = await verifyPassword(clave, user.Clave || '');
@@ -57,6 +68,25 @@ export async function POST(request: NextRequest) {
       .map((u: any) => u.RolNombre)
       .filter((r: string) => r);
 
+    // Obtener permisos detallados del usuario
+    const permisos = await query(
+      `SELECT 
+        m.Id as ModuloId,
+        m.Nombre as ModuloNombre,
+        MAX(CAST(rp.PermisoVer as int)) as PermisoVer,
+        MAX(CAST(rp.PermisoAgregar as int)) as PermisoAgregar,
+        MAX(CAST(rp.PermisoModificar as int)) as PermisoModificar,
+        MAX(CAST(rp.PermisoEliminar as int)) as PermisoEliminar
+      FROM TD_USUARIOS u
+      INNER JOIN TR_USUARIO_ROL ur ON u.Id = ur.UsuarioId
+      INNER JOIN TD_ROLES r ON ur.RolId = r.Id AND r.Estado = 'Activo'
+      INNER JOIN TR_ROL_MODULO_PERMISO rp ON r.Id = rp.RolId
+      INNER JOIN TD_MODULOS m ON rp.ModuloId = m.Id
+      WHERE u.Id = @userId
+      GROUP BY m.Id, m.Nombre`,
+      { userId: user.Id }
+    );
+
     // Generar token
     const token = generateToken({
       userId: user.Id,
@@ -72,6 +102,7 @@ export async function POST(request: NextRequest) {
         Nombre: user.Nombre,
         Usuario: user.Usuario,
         Roles: roles,
+        Permisos: permisos,
       },
     };
 

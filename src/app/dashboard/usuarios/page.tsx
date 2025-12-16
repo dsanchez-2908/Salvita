@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { Plus, Edit, Trash2, Search } from "lucide-react";
 
 export default function UsuariosPage() {
@@ -24,6 +25,7 @@ export default function UsuariosPage() {
     Estado: "Activo",
   });
   const { toast } = useToast();
+  const confirm = useConfirm();
 
   useEffect(() => {
     loadData();
@@ -48,7 +50,11 @@ export default function UsuariosPage() {
       ]);
 
       if (usuariosData.success) setUsuarios(usuariosData.data);
-      if (rolesData.success) setRoles(rolesData.data);
+      if (rolesData.success) {
+        // Filtrar solo roles activos para la selección
+        const rolesActivos = rolesData.data.filter((rol: any) => rol.Estado === "Activo");
+        setRoles(rolesActivos);
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -145,7 +151,13 @@ export default function UsuariosPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("¿Está seguro de eliminar este usuario?")) return;
+    const confirmed = await confirm({
+      title: "¿Eliminar este usuario?",
+      description: "Se perderá el acceso al sistema. Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar"
+    });
+    if (!confirmed) return;
 
     const token = localStorage.getItem("token");
     try {

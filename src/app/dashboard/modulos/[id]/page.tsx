@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { useConfirm } from "@/components/ConfirmDialog";
+import { usePermisos } from "@/hooks/usePermisos";
 import { Plus, Edit, Trash2, X, Eye, Search, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import { Label } from "@/components/ui/label";
 
@@ -33,6 +35,8 @@ export default function ModuloDinamicoPage() {
   const router = useRouter();
   const moduloId = params.id as string;
   const { toast } = useToast();
+  const confirm = useConfirm();
+  const permisos = usePermisos(moduloId);
 
   const [modulo, setModulo] = useState<Modulo | null>(null);
   const [campos, setCampos] = useState<Campo[]>([]);
@@ -242,7 +246,13 @@ export default function ModuloDinamicoPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm(`¿Está seguro de eliminar este registro?\n\nEsta acción no se puede deshacer.`)) return;
+    const confirmed = await confirm({
+      title: "¿Eliminar este registro?",
+      description: "Se perderán todos los datos asociados. Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar"
+    });
+    if (!confirmed) return;
 
     try {
       const token = localStorage.getItem("token");
@@ -526,15 +536,17 @@ export default function ModuloDinamicoPage() {
           <h1 className="text-3xl font-bold text-gray-900">{modulo.Nombre}</h1>
           <p className="text-gray-500 mt-1">Gestión de {modulo.Nombre.toLowerCase()}</p>
         </div>
-        <Button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo
-        </Button>
+        {permisos.agregar && (
+          <Button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo
+          </Button>
+        )}
       </div>
 
       {/* Barra de búsqueda */}
@@ -663,22 +675,26 @@ export default function ModuloDinamicoPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEdit(registro)}
-                          title="Editar"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(registro.Id)}
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+                        {permisos.modificar && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(registro)}
+                            title="Editar"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {permisos.eliminar && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(registro.Id)}
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { Plus, Edit, Trash2, Search } from "lucide-react";
 
 export default function RolesPage() {
@@ -24,6 +25,7 @@ export default function RolesPage() {
     Permisos: [] as any[],
   });
   const { toast } = useToast();
+  const confirm = useConfirm();
 
   useEffect(() => {
     loadData();
@@ -163,7 +165,13 @@ export default function RolesPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("¿Está seguro de eliminar este rol?")) return;
+    const confirmed = await confirm({
+      title: "¿Eliminar este rol?",
+      description: "Se quitarán todos los permisos asociados. Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar"
+    });
+    if (!confirmed) return;
 
     const token = localStorage.getItem("token");
     try {

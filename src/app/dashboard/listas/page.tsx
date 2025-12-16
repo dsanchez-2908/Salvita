@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { Plus, Edit, Trash2, Search } from "lucide-react";
 
 export default function ListasPage() {
@@ -22,6 +23,7 @@ export default function ListasPage() {
     Valores: [{ Valor: "", Orden: 0 }],
   });
   const { toast } = useToast();
+  const confirm = useConfirm();
 
   useEffect(() => {
     loadData();
@@ -96,7 +98,13 @@ export default function ListasPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("¿Está seguro de eliminar esta lista?")) return;
+    const confirmed = await confirm({
+      title: "¿Eliminar esta lista?",
+      description: "Se perderán todos los valores asociados. Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar"
+    });
+    if (!confirmed) return;
     const token = localStorage.getItem("token");
     try {
       const response = await fetch(`/api/listas?id=${id}`, {

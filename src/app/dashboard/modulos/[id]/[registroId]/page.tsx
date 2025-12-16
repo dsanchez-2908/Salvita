@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import { useConfirm } from "@/components/ConfirmDialog";
+import { usePermisos } from "@/hooks/usePermisos";
 import { ArrowLeft, Plus, Edit, Trash2, X, FileText } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +43,8 @@ export default function DetalleRegistroPage() {
   const moduloId = params.id as string;
   const registroId = params.registroId as string;
   const { toast } = useToast();
+  const confirm = useConfirm();
+  const permisosModuloPrincipal = usePermisos(moduloId);
 
   const [modulo, setModulo] = useState<Modulo | null>(null);
   const [registro, setRegistro] = useState<any>(null);
@@ -56,6 +60,33 @@ export default function DetalleRegistroPage() {
   const [secundarioFormData, setSecundarioFormData] = useState<Record<string, any>>({});
   const [archivosSecundarios, setArchivosSecundarios] = useState<Record<string, File>>({});
   const [uploadingFiles, setUploadingFiles] = useState(false);
+
+  // Función helper para obtener permisos de un módulo secundario
+  const getPermisosModulo = (moduloId: number) => {
+    const userData = localStorage.getItem("user");
+    if (!userData) return { ver: false, agregar: false, modificar: false, eliminar: false };
+    
+    const user = JSON.parse(userData);
+    const isAdmin = user.Roles?.includes("Administrador");
+    
+    if (isAdmin) {
+      return { ver: true, agregar: true, modificar: true, eliminar: true };
+    }
+    
+    const permisosList = user.Permisos || [];
+    const permisoModulo = permisosList.find((p: any) => p.ModuloId === moduloId);
+    
+    if (permisoModulo) {
+      return {
+        ver: permisoModulo.PermisoVer === 1,
+        agregar: permisoModulo.PermisoAgregar === 1,
+        modificar: permisoModulo.PermisoModificar === 1,
+        eliminar: permisoModulo.PermisoEliminar === 1,
+      };
+    }
+    
+    return { ver: false, agregar: false, modificar: false, eliminar: false };
+  };
 
   useEffect(() => {
     loadData();
@@ -300,7 +331,13 @@ export default function DetalleRegistroPage() {
     const moduloSec = modulosSecundarios.find(m => m.Id === moduloSecId);
     const nombreModulo = moduloSec?.Nombre || 'registro';
     
-    if (!confirm(`¿Desea eliminar este ${nombreModulo.toLowerCase()}?\n\nPodrá restaurarlo más tarde si es necesario.`)) return;
+    const confirmed = await confirm({
+      title: `¿Eliminar este ${nombreModulo.toLowerCase()}?`,
+      description: "Se perderán todos los datos asociados. Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar"
+    });
+    if (!confirmed) return;
 
     try {
       const token = localStorage.getItem("token");
@@ -580,22 +617,25 @@ export default function DetalleRegistroPage() {
       {modulosSecundarios && modulosSecundarios.length > 0 && modulosSecundarios.map((moduloSec) => {
         const registros = registrosSecundarios[moduloSec.Id] || [];
         const camposVisiblesGrilla = (moduloSec.Campos || []).filter((c) => c.VisibleEnGrilla);
+        const permisosModuloSec = getPermisosModulo(moduloSec.Id);
 
         return (
           <Card key={moduloSec.Id}>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>{moduloSec.Nombre}</CardTitle>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    resetSecundarioForm(moduloSec.Campos);
-                    setShowSecundarioForm(moduloSec.Id);
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Agregar
-                </Button>
+                {permisosModuloSec.agregar && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      resetSecundarioForm(moduloSec.Campos);
+                      setShowSecundarioForm(moduloSec.Id);
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Agregar
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -695,20 +735,24 @@ export default function DetalleRegistroPage() {
                           ))}
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex justify-end space-x-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEditSecundario(moduloSec.Id, reg)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteSecundario(moduloSec.Id, reg.Id)}
-                              >
-                                <Trash2 className="h-4 w-4 text-red-500" />
-                              </Button>
+                              {permisosModuloSec.modificar && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditSecundario(moduloSec.Id, reg)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {permisosModuloSec.eliminar && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteSecundario(moduloSec.Id, reg.Id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>

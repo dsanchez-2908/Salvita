@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 
 interface User {
   Id: number;
@@ -103,37 +104,38 @@ export default function DashboardLayout({
   const isAdmin = user.Roles.includes("Administrador");
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-10">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-            <h1 className="text-xl font-bold text-primary">{projectName}</h1>
+    <ConfirmProvider>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-10">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+              <h1 className="text-xl font-bold text-primary">{projectName}</h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">{user.Nombre}</span>
+              <Button variant="ghost" size="icon" onClick={handleLogout}>
+                <LogOut className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">{user.Nombre}</span>
-            <Button variant="ghost" size="icon" onClick={handleLogout}>
-              <LogOut className="h-5 w-5" />
-            </Button>
-          </div>
-        </div>
-      </header>
+        </header>
 
-      <div className="flex pt-14">
-        {/* Sidebar */}
-        <aside
-          className={`${
-            sidebarOpen ? "w-64" : "w-0"
-          } bg-white border-r border-gray-200 transition-all duration-300 overflow-hidden fixed left-0 top-14 bottom-0`}
-        >
-          <nav className="p-4 space-y-2">
+        <div className="flex pt-14">
+          {/* Sidebar */}
+          <aside
+            className={`${
+              sidebarOpen ? "w-64" : "w-0"
+            } bg-white border-r border-gray-200 transition-all duration-300 overflow-hidden fixed left-0 top-14 bottom-0`}
+          >
+            <nav className="p-4 space-y-2">
             <Link href="/dashboard">
               <Button
                 variant={pathname === "/dashboard" ? "secondary" : "ghost"}
@@ -243,20 +245,21 @@ export default function DashboardLayout({
                 })}
               </div>
             )}
-          </nav>
-        </aside>
+            </nav>
+          </aside>
 
-        {/* Main Content */}
-        <main
-          className={`flex-1 p-6 transition-all duration-300 ${
-            sidebarOpen ? "ml-64" : "ml-0"
-          }`}
-        >
-          {children}
-        </main>
+          {/* Main Content */}
+          <main
+            className={`flex-1 p-6 transition-all duration-300 ${
+              sidebarOpen ? "ml-64" : "ml-0"
+            }`}
+          >
+            {children}
+          </main>
+        </div>
+
+        <Toaster />
       </div>
-
-      <Toaster />
-    </div>
+    </ConfirmProvider>
   );
 }

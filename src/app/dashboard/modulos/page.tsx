@@ -11,6 +11,7 @@ import {
   Folder, File, Package, Briefcase, Heart, Star, Shield
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
 type TipoDato = "Texto" | "Descripcion" | "Numero" | "Fecha" | "FechaHora" | "Lista" | "Archivo";
@@ -62,6 +63,7 @@ const ICONOS = [
 
 export default function ModulosPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [modulos, setModulos] = useState<Modulo[]>([]);
   const [listas, setListas] = useState<Lista[]>([]);
   const [loading, setLoading] = useState(true);
@@ -295,7 +297,13 @@ export default function ModulosPage() {
   };
 
   const handleDeleteModulo = async (moduloId: number) => {
-    if (!confirm("¿Está seguro de eliminar este módulo? Esta acción no se puede deshacer.")) {
+    const confirmed = await confirm({
+      title: "¿Eliminar este módulo?",
+      description: "Se perderán todos los datos y configuraciones asociadas. Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar"
+    });
+    if (!confirmed) {
       return;
     }
 
