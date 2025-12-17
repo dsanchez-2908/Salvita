@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { usePermisos } from "@/hooks/usePermisos";
-import { Plus, Edit, Trash2, X, Eye, Search, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { Plus, Edit, Trash2, X, Eye, Search, ChevronLeft, ChevronRight, FileText, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Label } from "@/components/ui/label";
 
 interface Campo {
@@ -51,6 +51,8 @@ export default function ModuloDinamicoPage() {
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const recordsPerPage = 10;
 
   useEffect(() => {
@@ -325,6 +327,42 @@ export default function ModuloDinamicoPage() {
     setRegistrosFiltrados(filtered);
   };
 
+  const handleSort = (columnName: string) => {
+    let direction: "asc" | "desc" = "asc";
+    
+    if (sortColumn === columnName && sortDirection === "asc") {
+      direction = "desc";
+    }
+    
+    setSortColumn(columnName);
+    setSortDirection(direction);
+    
+    const sorted = [...registrosFiltrados].sort((a, b) => {
+      const aValue = a[columnName];
+      const bValue = b[columnName];
+      
+      // Manejar valores nulos
+      if (aValue === null || aValue === undefined) return 1;
+      if (bValue === null || bValue === undefined) return -1;
+      
+      // Comparar valores
+      if (typeof aValue === "number" && typeof bValue === "number") {
+        return direction === "asc" ? aValue - bValue : bValue - aValue;
+      }
+      
+      const aStr = String(aValue).toLowerCase();
+      const bStr = String(bValue).toLowerCase();
+      
+      if (direction === "asc") {
+        return aStr.localeCompare(bStr);
+      } else {
+        return bStr.localeCompare(aStr);
+      }
+    });
+    
+    setRegistrosFiltrados(sorted);
+  };
+
   const renderInput = (campo: Campo) => {
     const value = formData[campo.Nombre] || "";
 
@@ -333,7 +371,7 @@ export default function ModuloDinamicoPage() {
         return (
           <input
             type="text"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => setFormData({ ...formData, [campo.Nombre]: e.target.value })}
             maxLength={campo.Largo || undefined}
@@ -344,7 +382,7 @@ export default function ModuloDinamicoPage() {
       case "Descripcion":
         return (
           <textarea
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             rows={3}
             value={value}
             onChange={(e) => setFormData({ ...formData, [campo.Nombre]: e.target.value })}
@@ -356,7 +394,7 @@ export default function ModuloDinamicoPage() {
         return (
           <input
             type="number"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => setFormData({ ...formData, [campo.Nombre]: e.target.value })}
             required={campo.Obligatorio}
@@ -367,7 +405,7 @@ export default function ModuloDinamicoPage() {
         return (
           <input
             type="date"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => setFormData({ ...formData, [campo.Nombre]: e.target.value })}
             required={campo.Obligatorio}
@@ -378,7 +416,7 @@ export default function ModuloDinamicoPage() {
         return (
           <input
             type="datetime-local"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => setFormData({ ...formData, [campo.Nombre]: e.target.value })}
             required={campo.Obligatorio}
@@ -389,7 +427,7 @@ export default function ModuloDinamicoPage() {
         const valores = campo.ListaId ? valoresListas[campo.ListaId] || [] : [];
         return (
           <select
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => setFormData({ ...formData, [campo.Nombre]: e.target.value })}
             required={campo.Obligatorio}
@@ -408,7 +446,7 @@ export default function ModuloDinamicoPage() {
           <div className="space-y-2">
             <input
               type="file"
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
@@ -420,12 +458,12 @@ export default function ModuloDinamicoPage() {
               required={campo.Obligatorio && !value && !archivos[campo.Nombre]}
             />
             {value && !archivos[campo.Nombre] && (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
                 Archivo actual: {value}
               </div>
             )}
             {archivos[campo.Nombre] && (
-              <div className="text-sm text-green-600">
+              <div className="text-sm text-green-600 dark:text-green-400">
                 Nuevo archivo: {archivos[campo.Nombre].name}
               </div>
             )}
@@ -436,7 +474,7 @@ export default function ModuloDinamicoPage() {
         return (
           <input
             type="text"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => setFormData({ ...formData, [campo.Nombre]: e.target.value })}
             required={campo.Obligatorio}
@@ -508,7 +546,7 @@ export default function ModuloDinamicoPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Cargando...</div>
+        <div className="text-lg dark:text-white">Cargando...</div>
       </div>
     );
   }
@@ -516,7 +554,7 @@ export default function ModuloDinamicoPage() {
   if (!modulo) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-red-500">Módulo no encontrado</div>
+        <div className="text-lg text-red-500 dark:text-red-400">Módulo no encontrado</div>
       </div>
     );
   }
@@ -533,8 +571,8 @@ export default function ModuloDinamicoPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">{modulo.Nombre}</h1>
-          <p className="text-gray-500 mt-1">Gestión de {modulo.Nombre.toLowerCase()}</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{modulo.Nombre}</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Gestión de {modulo.Nombre.toLowerCase()}</p>
         </div>
         {permisos.agregar && (
           <Button
@@ -550,19 +588,19 @@ export default function ModuloDinamicoPage() {
       </div>
 
       {/* Barra de búsqueda */}
-      <div className="bg-white p-4 rounded-lg shadow-md">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md dark:shadow-gray-900/50">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
           <Input
             type="text"
             placeholder={`Buscar en ${modulo.Nombre.toLowerCase()}...`}
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
-            className="pl-10"
+            className="pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
           />
         </div>
         {searchTerm && (
-          <div className="mt-2 text-sm text-gray-600">
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             {registrosFiltrados.length} resultado{registrosFiltrados.length !== 1 ? 's' : ''} encontrado{registrosFiltrados.length !== 1 ? 's' : ''}
           </div>
         )}
@@ -570,9 +608,9 @@ export default function ModuloDinamicoPage() {
 
       {/* Formulario */}
       {showForm && (
-        <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md dark:shadow-gray-900/50">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">
+            <h2 className="text-xl font-semibold dark:text-white">
               {editingId ? "Editar Registro" : "Nuevo Registro"}
             </h2>
             <Button
@@ -594,7 +632,7 @@ export default function ModuloDinamicoPage() {
                 .filter((c) => c.Visible)
                 .map((campo) => (
                   <div key={campo.Id}>
-                    <Label htmlFor={campo.Nombre}>
+                    <Label htmlFor={campo.Nombre} className="dark:text-gray-300">
                       {campo.Nombre}
                       {campo.Obligatorio && <span className="text-red-500 ml-1">*</span>}
                     </Label>
@@ -627,30 +665,42 @@ export default function ModuloDinamicoPage() {
       )}
 
       {/* Tabla de registros */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
                 {camposVisiblesGrilla.map((campo) => (
                   <th
                     key={campo.Id}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                    onClick={() => handleSort(campo.Nombre)}
                   >
-                    {campo.Nombre}
+                    <div className="flex items-center gap-2">
+                      <span>{campo.Nombre}</span>
+                      {sortColumn === campo.Nombre ? (
+                        sortDirection === "asc" ? (
+                          <ArrowUp className="h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="h-3 w-3" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 opacity-40" />
+                      )}
+                    </div>
                   </th>
                 ))}
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Acciones
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {registrosFiltrados.length === 0 ? (
                 <tr>
                   <td
                     colSpan={camposVisiblesGrilla.length + 1}
-                    className="px-6 py-4 text-center text-gray-500"
+                    className="px-6 py-4 text-center text-gray-500 dark:text-gray-400"
                   >
                     {searchTerm 
                       ? `No se encontraron resultados para "${searchTerm}"`
@@ -659,9 +709,9 @@ export default function ModuloDinamicoPage() {
                 </tr>
               ) : (
                 currentRecords.map((registro) => (
-                  <tr key={registro.Id} className="hover:bg-gray-50">
+                  <tr key={registro.Id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     {camposVisiblesGrilla.map((campo) => (
-                      <td key={campo.Id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td key={campo.Id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                         {renderCellValue(campo, registro)}
                       </td>
                     ))}
@@ -707,8 +757,8 @@ export default function ModuloDinamicoPage() {
 
       {/* Paginación */}
       {registrosFiltrados.length > recordsPerPage && (
-        <div className="flex items-center justify-between bg-white px-4 py-3 rounded-lg shadow-md">
-          <div className="text-sm text-gray-700">
+        <div className="flex items-center justify-between bg-white dark:bg-gray-800 px-4 py-3 rounded-lg shadow-md dark:shadow-gray-900/50">
+          <div className="text-sm text-gray-700 dark:text-gray-300">
             Mostrando <span className="font-medium">{indexOfFirstRecord + 1}</span> a{" "}
             <span className="font-medium">
               {Math.min(indexOfLastRecord, registrosFiltrados.length)}
@@ -764,7 +814,7 @@ export default function ModuloDinamicoPage() {
       )}
 
       {/* Resumen */}
-      <div className="text-sm text-gray-500">
+      <div className="text-sm text-gray-500 dark:text-gray-400">
         Total de registros: {registros.length}
         {searchTerm && ` (${registrosFiltrados.length} filtrado${registrosFiltrados.length !== 1 ? 's' : ''})`}
       </div>

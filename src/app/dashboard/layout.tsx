@@ -15,11 +15,14 @@ import {
   Folder,
   FileText,
   Calendar,
-  File
+  File,
+  Moon,
+  Sun
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
+import { useTheme } from "@/hooks/useTheme";
 
 interface User {
   Id: number;
@@ -40,6 +43,7 @@ export default function DashboardLayout({
   const [configOpen, setConfigOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -105,9 +109,9 @@ export default function DashboardLayout({
 
   return (
     <ConfirmProvider>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-10">
+        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 fixed top-0 left-0 right-0 z-10">
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center space-x-4">
               <Button
@@ -119,8 +123,8 @@ export default function DashboardLayout({
               </Button>
               <h1 className="text-xl font-bold text-primary">{projectName}</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">{user.Nombre}</span>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600 dark:text-gray-300">{user.Nombre}</span>
               <Button variant="ghost" size="icon" onClick={handleLogout}>
                 <LogOut className="h-5 w-5" />
               </Button>
@@ -133,9 +137,9 @@ export default function DashboardLayout({
           <aside
             className={`${
               sidebarOpen ? "w-64" : "w-0"
-            } bg-white border-r border-gray-200 transition-all duration-300 overflow-hidden fixed left-0 top-14 bottom-0`}
+            } bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 overflow-hidden fixed left-0 top-14 bottom-0 flex flex-col`}
           >
-            <nav className="p-4 space-y-2">
+            <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
             <Link href="/dashboard">
               <Button
                 variant={pathname === "/dashboard" ? "secondary" : "ghost"}
@@ -213,8 +217,8 @@ export default function DashboardLayout({
 
             {/* Módulos Dinámicos */}
             {modulos.length > 0 && (
-              <div className="pt-4 border-t border-gray-200">
-                <h3 className="px-2 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="px-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                   Módulos
                 </h3>
                 {modulos.map((modulo) => {
@@ -246,6 +250,25 @@ export default function DashboardLayout({
               </div>
             )}
             </nav>
+
+            {/* Toggle de Tema al fondo */}
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600 dark:text-gray-300">Modo oscuro</span>
+                <button
+                  onClick={toggleTheme}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    theme === "dark" ? "bg-blue-600" : "bg-gray-300"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      theme === "dark" ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
           </aside>
 
           {/* Main Content */}

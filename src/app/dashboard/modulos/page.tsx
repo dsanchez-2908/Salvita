@@ -15,7 +15,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
 type TipoDato = "Texto" | "Descripcion" | "Numero" | "Fecha" | "FechaHora" | "Lista" | "Archivo";
-type TipoModulo = "Principal" | "Secundario" | "Independiente";
+type TipoModulo = "Principal" | "Secundario";
 
 interface Campo {
   tempId: string;
@@ -30,7 +30,8 @@ interface Campo {
 }
 
 interface Modulo {
-  ModuloId: number;
+  Id?: number;
+  ModuloId?: number;
   Nombre: string;
   NombreTabla: string;
   Tipo: TipoModulo;
@@ -70,6 +71,8 @@ export default function ModulosPage() {
   const [showForm, setShowForm] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showIconSelector, setShowIconSelector] = useState(false);
+  const [editingModuloId, setEditingModuloId] = useState<number | null>(null);
+  const [camposExistentes, setCamposExistentes] = useState<Set<string>>(new Set());
 
   const [formData, setFormData] = useState({
     Nombre: "",
@@ -187,27 +190,32 @@ export default function ModulosPage() {
     const requestData = {
       Nombre: formData.Nombre,
       Tipo: formData.Tipo,
-      ModuloPrincipalId: formData.ModuloPadreId,
+      ModuloPadreId: formData.ModuloPadreId,
       Icono: formData.Icono,
       Orden: formData.Orden,
       Campos: campos.map(({ tempId, ...campo }) => campo),
     };
 
+    console.log("Datos a enviar:", requestData);
+
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/api/modulos", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(requestData),
-      });
+      const response = await fetch(
+        editingModuloId ? `/api/modulos?id=${editingModuloId}` : "/api/modulos",
+        {
+          method: editingModuloId ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(requestData),
+        }
+      );
 
       if (response.ok) {
         toast({
           title: "Éxito",
-          description: "Módulo creado correctamente",
+          description: editingModuloId ? "Módulo actualizado correctamente" : "Módulo creado correctamente",
         });
         setShowForm(false);
         resetForm();
@@ -217,7 +225,7 @@ export default function ModulosPage() {
         const error = await response.json();
         toast({
           title: "Error",
-          description: error.message || "No se pudo crear el módulo",
+          description: error.message || (editingModuloId ? "No se pudo actualizar el módulo" : "No se pudo crear el módulo"),
           variant: "destructive",
         });
       }
@@ -225,7 +233,7 @@ export default function ModulosPage() {
       console.error("Error:", error);
       toast({
         title: "Error",
-        description: "Error al crear el módulo",
+        description: editingModuloId ? "Error al actualizar el módulo" : "Error al crear el módulo",
         variant: "destructive",
       });
     }
@@ -253,6 +261,8 @@ export default function ModulosPage() {
       },
     ]);
     setShowPreview(false);
+    setEditingModuloId(null);
+    setCamposExistentes(new Set());
   };
 
   const addCampo = () => {
@@ -273,6 +283,16 @@ export default function ModulosPage() {
   };
 
   const removeCampo = (index: number) => {
+    const campo = campos[index];
+    // No permitir eliminar campos existentes en modo edición
+    if (editingModuloId && camposExistentes.has(campo.Nombre)) {
+      toast({
+        title: "No permitido",
+        description: "No se pueden eliminar campos existentes para evitar pérdida de datos",
+        variant: "destructive",
+      });
+      return;
+    }
     if (campos.length > 1) {
       setCampos(campos.filter((_, i) => i !== index));
     }
@@ -294,6 +314,67 @@ export default function ModulosPage() {
     }
     
     setCampos(newCampos);
+  };
+
+  const handleEditModulo = async (moduloId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`/api/modulos?id=${moduloId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const modulo = result.data;
+        
+        // Cargar datos del módulo en el formulario
+        setFormData({
+          Nombre: modulo.Nombre,
+          Tipo: modulo.Tipo,
+          ModuloPadreId: modulo.ModuloPrincipalId || modulo.ModuloPadreId,
+          Icono: modulo.Icono || "FileText",
+          Orden: modulo.Orden,
+        });
+
+        // Cargar campos del módulo
+        if (modulo.Campos && modulo.Campos.length > 0) {
+          const nombresCampos = new Set(modulo.Campos.map((c: any) => c.Nombre));
+          setCamposExistentes(nombresCampos);
+          setCampos(
+            modulo.Campos.map((campo: any) => ({
+              tempId: crypto.randomUUID(),
+              Nombre: campo.Nombre,
+              TipoDato: campo.TipoDato,
+              Largo: campo.Largo || 100,
+              ListaId: campo.ListaId,
+              Orden: campo.Orden,
+              Visible: campo.Visible,
+              VisibleEnGrilla: campo.VisibleEnGrilla,
+              Obligatorio: campo.Obligatorio,
+            }))
+          );
+        }
+
+        setEditingModuloId(moduloId);
+        setShowForm(true);
+        setShowPreview(false);
+      } else {
+        toast({
+          title: "Error",
+          description: "No se pudo cargar el módulo",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      toast({
+        title: "Error",
+        description: "Error al cargar el módulo",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeleteModulo = async (moduloId: number) => {
@@ -325,7 +406,7 @@ export default function ModulosPage() {
         const error = await response.json();
         toast({
           title: "Error",
-          description: error.message || "No se pudo eliminar el módulo",
+          description: error.error || error.message || "No se pudo eliminar el módulo",
           variant: "destructive",
         });
       }
@@ -340,7 +421,7 @@ export default function ModulosPage() {
   };
 
   const tiposDato: TipoDato[] = ["Texto", "Descripcion", "Numero", "Fecha", "FechaHora", "Lista", "Archivo"];
-  const tiposModulo: TipoModulo[] = ["Principal", "Secundario", "Independiente"];
+  const tiposModulo: TipoModulo[] = ["Principal", "Secundario"];
 
   const SelectedIcon = ICONOS.find(i => i.name === formData.Icono)?.icon || FileText;
 
@@ -356,8 +437,8 @@ export default function ModulosPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Administración de Módulos</h1>
-          <p className="text-gray-500 mt-1">Crea y gestiona los módulos dinámicos del sistema</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Administración de Módulos</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Crea y gestiona los módulos dinámicos del sistema</p>
         </div>
         {!showForm && (
           <Button onClick={() => setShowForm(true)} size="lg">
@@ -367,16 +448,18 @@ export default function ModulosPage() {
       </div>
 
       {showForm && (
-        <Card className="shadow-lg">
-          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+        <Card className="shadow-lg border-gray-200 dark:border-gray-700 dark:bg-gray-800">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-800">
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-3">
-                <div className="bg-blue-500 text-white p-2 rounded-lg">
+                <div className="bg-blue-500 dark:bg-blue-600 text-white p-2 rounded-lg">
                   <SelectedIcon className="h-6 w-6" />
                 </div>
                 <div>
-                  <CardTitle className="text-2xl">Crear Nuevo Módulo</CardTitle>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <CardTitle className="text-2xl text-gray-900 dark:text-white">
+                    {editingModuloId ? "Editar Módulo" : "Crear Nuevo Módulo"}
+                  </CardTitle>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                     Define la estructura y campos del módulo
                   </p>
                 </div>
@@ -409,14 +492,14 @@ export default function ModulosPage() {
               <div className={`${showPreview ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* Información del Módulo */}
-                  <Card className="border-2">
+                  <Card className="border-2 dark:border-gray-700 dark:bg-gray-800">
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">Información General</CardTitle>
+                      <CardTitle className="text-lg dark:text-white">Información General</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2 md:col-span-1">
-                          <Label htmlFor="nombre" className="text-sm font-medium">
+                          <Label htmlFor="nombre" className="text-sm font-medium dark:text-gray-300">
                             Nombre del Módulo <span className="text-red-500">*</span>
                           </Label>
                           <Input
@@ -424,20 +507,21 @@ export default function ModulosPage() {
                             value={formData.Nombre}
                             onChange={(e) => setFormData({ ...formData, Nombre: e.target.value })}
                             placeholder="ej: Residentes, Empleados..."
-                            className="mt-1"
+                            className="mt-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                             required
                           />
                         </div>
 
                         <div className="col-span-2 md:col-span-1">
-                          <Label htmlFor="tipo" className="text-sm font-medium">Tipo de Módulo</Label>
+                          <Label htmlFor="tipo" className="text-sm font-medium dark:text-gray-300">Tipo de Módulo</Label>
                           <select
                             id="tipo"
-                            className="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                             value={formData.Tipo}
                             onChange={(e) =>
                               setFormData({ ...formData, Tipo: e.target.value as TipoModulo })
                             }
+                            disabled={!!editingModuloId}
                           >
                             {tiposModulo.map((tipo) => (
                               <option key={tipo} value={tipo}>
@@ -449,26 +533,29 @@ export default function ModulosPage() {
 
                         {formData.Tipo === "Secundario" && (
                           <div className="col-span-2">
-                            <Label htmlFor="moduloPadre" className="text-sm font-medium">
+                            <Label htmlFor="moduloPadre" className="text-sm font-medium dark:text-gray-300">
                               Módulo Padre <span className="text-red-500">*</span>
+                              {editingModuloId && <span className="text-xs text-blue-500 ml-2">(Editable)</span>}
                             </Label>
                             <select
                               id="moduloPadre"
-                              className="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              value={formData.ModuloPadreId || ""}
-                              onChange={(e) =>
+                              className="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              value={formData.ModuloPadreId?.toString() || ""}
+                              onChange={(e) => {
+                                const newValue = e.target.value ? parseInt(e.target.value) : null;
+                                console.log("Seleccionando módulo padre:", newValue, "valor del evento:", e.target.value);
                                 setFormData({
                                   ...formData,
-                                  ModuloPadreId: e.target.value ? parseInt(e.target.value) : null,
-                                })
-                              }
+                                  ModuloPadreId: newValue,
+                                });
+                              }}
                               required
                             >
                               <option value="">Seleccionar...</option>
                               {modulos
                                 .filter((m) => m.Tipo === "Principal")
                                 .map((m) => (
-                                  <option key={m.ModuloId} value={m.ModuloId}>
+                                  <option key={m.Id || m.ModuloId} value={m.Id || m.ModuloId}>
                                     {m.Nombre}
                                   </option>
                                 ))}
@@ -477,19 +564,20 @@ export default function ModulosPage() {
                         )}
 
                         <div className="col-span-2 md:col-span-1">
-                          <Label className="text-sm font-medium">Icono</Label>
+                          <Label className="text-sm font-medium dark:text-gray-300">Icono</Label>
                           <Button
                             type="button"
                             variant="outline"
-                            className="w-full mt-1 justify-start"
+                            className="w-full mt-1 justify-start dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => setShowIconSelector(!showIconSelector)}
+                            disabled={!!editingModuloId}
                           >
                             <SelectedIcon className="h-4 w-4 mr-2" />
                             {ICONOS.find(i => i.name === formData.Icono)?.label || formData.Icono}
                           </Button>
                           
-                          {showIconSelector && (
-                            <div className="absolute z-10 mt-2 p-4 bg-white border rounded-lg shadow-lg grid grid-cols-4 gap-2">
+                          {showIconSelector && !editingModuloId && (
+                            <div className="absolute z-10 mt-2 p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg grid grid-cols-4 gap-2">
                               {ICONOS.map(({ name, icon: Icon, label }) => (
                                 <button
                                   key={name}
@@ -498,12 +586,12 @@ export default function ModulosPage() {
                                     setFormData({ ...formData, Icono: name });
                                     setShowIconSelector(false);
                                   }}
-                                  className={`p-3 rounded-md hover:bg-blue-50 border-2 transition-colors ${
-                                    formData.Icono === name ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                                  className={`p-3 rounded-md hover:bg-blue-50 dark:hover:bg-gray-700 border-2 transition-colors ${
+                                    formData.Icono === name ? 'border-blue-500 bg-blue-50 dark:bg-gray-700' : 'border-gray-200 dark:border-gray-600'
                                   }`}
                                   title={label}
                                 >
-                                  <Icon className="h-6 w-6 mx-auto" />
+                                  <Icon className="h-6 w-6 mx-auto dark:text-gray-300" />
                                 </button>
                               ))}
                             </div>
@@ -511,7 +599,7 @@ export default function ModulosPage() {
                         </div>
 
                         <div className="col-span-2 md:col-span-1">
-                          <Label htmlFor="orden" className="text-sm font-medium">Orden en Menú</Label>
+                          <Label htmlFor="orden" className="text-sm font-medium dark:text-gray-300">Orden en Menú</Label>
                           <Input
                             id="orden"
                             type="number"
@@ -520,7 +608,7 @@ export default function ModulosPage() {
                               setFormData({ ...formData, Orden: parseInt(e.target.value) || 1 })
                             }
                             min="1"
-                            className="mt-1"
+                            className="mt-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                           />
                         </div>
                       </div>
@@ -528,12 +616,12 @@ export default function ModulosPage() {
                   </Card>
 
                   {/* Campos */}
-                  <Card className="border-2">
+                  <Card className="border-2 dark:border-gray-700 dark:bg-gray-800">
                     <CardHeader className="pb-3">
                       <div className="flex justify-between items-center">
                         <div>
-                          <CardTitle className="text-lg">Campos del Módulo</CardTitle>
-                          <p className="text-sm text-gray-500 mt-1">Arrastra para reordenar</p>
+                          <CardTitle className="text-lg dark:text-white">Campos del Módulo</CardTitle>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Arrastra para reordenar</p>
                         </div>
                         <Button type="button" size="sm" onClick={addCampo}>
                           <Plus className="mr-2 h-4 w-4" /> Agregar Campo
@@ -555,10 +643,17 @@ export default function ModulosPage() {
                                     <div
                                       ref={provided.innerRef}
                                       {...provided.draggableProps}
-                                      className={`bg-white border-2 rounded-lg p-4 transition-shadow ${
-                                        snapshot.isDragging ? 'shadow-lg border-blue-400' : 'border-gray-200'
+                                      className={`bg-white dark:bg-gray-700 border-2 rounded-lg p-4 transition-shadow ${
+                                        snapshot.isDragging ? 'shadow-lg border-blue-400 dark:border-blue-500' : 
+                                        editingModuloId !== null && camposExistentes.has(campo.Nombre) ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10' :
+                                        'border-gray-200 dark:border-gray-600'
                                       }`}
                                     >
+                                      {editingModuloId !== null && camposExistentes.has(campo.Nombre) && (
+                                        <div className="mb-2 text-xs text-green-700 dark:text-green-400 font-medium">
+                                          ✓ Campo existente - Solo se puede editar: largo (texto), obligatorio, visible
+                                        </div>
+                                      )}
                                       <div className="grid grid-cols-12 gap-3 items-start">
                                         <div 
                                           {...provided.dragHandleProps}
@@ -568,23 +663,25 @@ export default function ModulosPage() {
                                         </div>
 
                                         <div className="col-span-11 grid grid-cols-12 gap-3">
-                                          <div className="col-span-12 md:col-span-4">
-                                            <Label className="text-xs">Nombre <span className="text-red-500">*</span></Label>
+                                          <div className="col-span-12 md:col-span-3">
+                                            <Label className="text-xs dark:text-gray-300">Nombre <span className="text-red-500">*</span></Label>
                                             <Input
                                               value={campo.Nombre}
                                               onChange={(e) => updateCampo(index, "Nombre", e.target.value)}
                                               placeholder="Nombre del campo"
-                                              className="mt-1"
+                                              className="mt-1 dark:bg-gray-600 dark:border-gray-500 dark:text-white dark:placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                              disabled={editingModuloId !== null && camposExistentes.has(campo.Nombre)}
                                               required
                                             />
                                           </div>
 
-                                          <div className="col-span-12 md:col-span-3">
-                                            <Label className="text-xs">Tipo <span className="text-red-500">*</span></Label>
+                                          <div className="col-span-12 md:col-span-2">
+                                            <Label className="text-xs dark:text-gray-300">Tipo <span className="text-red-500">*</span></Label>
                                             <select
-                                              className="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+                                              className="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 text-sm dark:bg-gray-600 dark:border-gray-500 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                               value={campo.TipoDato}
                                               onChange={(e) => updateCampo(index, "TipoDato", e.target.value)}
+                                              disabled={editingModuloId !== null && camposExistentes.has(campo.Nombre)}
                                             >
                                               {tiposDato.map((tipo) => (
                                                 <option key={tipo} value={tipo}>
@@ -594,46 +691,47 @@ export default function ModulosPage() {
                                             </select>
                                           </div>
 
-                                          {campo.TipoDato === "Texto" && (
-                                            <div className="col-span-12 md:col-span-2">
-                                              <Label className="text-xs">Largo</Label>
-                                              <Input
-                                                type="number"
-                                                value={campo.Largo || 100}
-                                                onChange={(e) =>
-                                                  updateCampo(index, "Largo", parseInt(e.target.value) || 100)
-                                                }
-                                                min="1"
-                                                max="8000"
-                                                className="mt-1"
-                                              />
-                                            </div>
-                                          )}
+                                          <div className="col-span-12 md:col-span-2">
+                                            {campo.TipoDato === "Texto" && (
+                                              <>
+                                                <Label className="text-xs dark:text-gray-300">Largo</Label>
+                                                <Input
+                                                  type="number"
+                                                  value={campo.Largo || 100}
+                                                  onChange={(e) =>
+                                                    updateCampo(index, "Largo", parseInt(e.target.value) || 100)
+                                                  }
+                                                  min="1"
+                                                  max="8000"
+                                                  className="mt-1 dark:bg-gray-600 dark:border-gray-500 dark:text-white"
+                                                />
+                                              </>
+                                            )}
+                                            {campo.TipoDato === "Lista" && (
+                                              <>
+                                                <Label className="text-xs dark:text-gray-300">Lista <span className="text-red-500">*</span></Label>
+                                                <select
+                                                  className="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 text-sm dark:bg-gray-600 dark:border-gray-500 dark:text-white"
+                                                  value={campo.ListaId || ""}
+                                                  onChange={(e) => {
+                                                    const value = e.target.value ? parseInt(e.target.value, 10) : null;
+                                                    updateCampo(index, "ListaId", value);
+                                                  }}
+                                                  required
+                                                >
+                                                  <option value="">Seleccionar...</option>
+                                                  {listas.map((lista) => (
+                                                    <option key={lista.Id} value={lista.Id}>
+                                                      {lista.Nombre}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                              </>
+                                            )}
+                                          </div>
 
-                                          {campo.TipoDato === "Lista" && (
-                                            <div className="col-span-12 md:col-span-3">
-                                              <Label className="text-xs">Lista <span className="text-red-500">*</span></Label>
-                                              <select
-                                                className="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
-                                                value={campo.ListaId || ""}
-                                                onChange={(e) => {
-                                                  const value = e.target.value ? parseInt(e.target.value, 10) : null;
-                                                  updateCampo(index, "ListaId", value);
-                                                }}
-                                                required
-                                              >
-                                                <option value="">Seleccionar...</option>
-                                                {listas.map((lista) => (
-                                                  <option key={lista.Id} value={lista.Id}>
-                                                    {lista.Nombre}
-                                                  </option>
-                                                ))}
-                                              </select>
-                                            </div>
-                                          )}
-
-                                          <div className="col-span-12 md:col-span-3 space-y-1 pt-5">
-                                            <label className="flex items-center space-x-2 text-xs">
+                                          <div className="col-span-12 md:col-span-4 space-y-1 pt-5">
+                                            <label className="flex items-center space-x-2 text-xs dark:text-gray-300">
                                               <input
                                                 type="checkbox"
                                                 checked={campo.Obligatorio}
@@ -642,7 +740,7 @@ export default function ModulosPage() {
                                               />
                                               <span>Obligatorio</span>
                                             </label>
-                                            <label className="flex items-center space-x-2 text-xs">
+                                            <label className="flex items-center space-x-2 text-xs dark:text-gray-300">
                                               <input
                                                 type="checkbox"
                                                 checked={campo.VisibleEnGrilla}
@@ -655,15 +753,17 @@ export default function ModulosPage() {
                                             </label>
                                           </div>
 
-                                          <div className="col-span-12 md:col-span-1 flex items-center justify-center pt-5">
+                                          <div className="col-span-12 md:col-span-1 flex items-start justify-center pt-5">
                                             {campos.length > 1 && (
                                               <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => removeCampo(index)}
+                                                disabled={editingModuloId !== null && camposExistentes.has(campo.Nombre)}
+                                                title={editingModuloId !== null && camposExistentes.has(campo.Nombre) ? "No se pueden eliminar campos existentes" : "Eliminar campo"}
                                               >
-                                                <Trash2 className="h-4 w-4 text-red-500" />
+                                                <Trash2 className={`h-4 w-4 ${editingModuloId !== null && camposExistentes.has(campo.Nombre) ? 'text-gray-400' : 'text-red-500'}`} />
                                               </Button>
                                             )}
                                           </div>
@@ -693,7 +793,7 @@ export default function ModulosPage() {
                       Cancelar
                     </Button>
                     <Button type="submit" size="lg">
-                      <Save className="mr-2 h-4 w-4" /> Crear Módulo
+                      <Save className="mr-2 h-4 w-4" /> {editingModuloId ? "Actualizar Módulo" : "Crear Módulo"}
                     </Button>
                   </div>
                 </form>
@@ -702,9 +802,9 @@ export default function ModulosPage() {
               {/* Vista Previa */}
               {showPreview && (
                 <div className="lg:col-span-1">
-                  <Card className="border-2 border-blue-200 sticky top-6">
-                    <CardHeader className="bg-blue-50">
-                      <CardTitle className="text-lg flex items-center">
+                  <Card className="border-2 border-blue-200 dark:border-blue-800 dark:bg-gray-800 sticky top-6">
+                    <CardHeader className="bg-blue-50 dark:bg-blue-900/20">
+                      <CardTitle className="text-lg flex items-center dark:text-white">
                         <Eye className="h-5 w-5 mr-2" />
                         Vista Previa
                       </CardTitle>
@@ -712,22 +812,22 @@ export default function ModulosPage() {
                     <CardContent className="pt-4">
                       <div className="space-y-4">
                         <div>
-                          <p className="text-xs text-gray-500 mb-1">Módulo</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Módulo</p>
                           <div className="flex items-center space-x-2">
                             <SelectedIcon className="h-5 w-5 text-blue-500" />
-                            <span className="font-medium">{formData.Nombre || "Sin nombre"}</span>
+                            <span className="font-medium dark:text-white">{formData.Nombre || "Sin nombre"}</span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">Tipo: {formData.Tipo}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Tipo: {formData.Tipo}</p>
                         </div>
 
                         <div>
-                          <p className="text-xs text-gray-500 mb-2">Campos ({campos.length})</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Campos ({campos.length})</p>
                           <div className="space-y-2">
                             {campos.map((campo, index) => (
-                              <div key={campo.tempId} className="bg-gray-50 p-2 rounded text-xs">
+                              <div key={campo.tempId} className="bg-gray-50 dark:bg-gray-700 p-2 rounded text-xs">
                                 <div className="flex items-center justify-between">
-                                  <span className="font-medium">{campo.Nombre || `Campo ${index + 1}`}</span>
-                                  <span className="text-gray-500">{campo.TipoDato}</span>
+                                  <span className="font-medium dark:text-white">{campo.Nombre || `Campo ${index + 1}`}</span>
+                                  <span className="text-gray-500 dark:text-gray-400">{campo.TipoDato}</span>
                                 </div>
                                 <div className="flex gap-2 mt-1">
                                   {campo.Obligatorio && (
@@ -742,9 +842,9 @@ export default function ModulosPage() {
                           </div>
                         </div>
 
-                        <div className="pt-2 border-t">
-                          <p className="text-xs text-gray-500 mb-1">Tabla generada</p>
-                          <p className="text-xs font-mono bg-gray-100 p-2 rounded">
+                        <div className="pt-2 border-t dark:border-gray-700">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Tabla generada</p>
+                          <p className="text-xs font-mono bg-gray-100 dark:bg-gray-700 dark:text-gray-300 p-2 rounded">
                             TD_MODULO_{formData.Nombre.toUpperCase().replace(/ /g, '_') || 'EJEMPLO'}
                           </p>
                         </div>
@@ -759,54 +859,125 @@ export default function ModulosPage() {
       )}
 
       {/* Lista de Módulos */}
-      <Card>
+      <Card className="dark:bg-gray-800 dark:border-gray-700">
         <CardHeader>
-          <CardTitle>Módulos Existentes ({modulos.length})</CardTitle>
+          <CardTitle className="dark:text-white">Módulos Existentes ({modulos.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {modulos.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <AlertCircle className="mx-auto h-16 w-16 mb-4 text-gray-300" />
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+              <AlertCircle className="mx-auto h-16 w-16 mb-4 text-gray-300 dark:text-gray-600" />
               <p className="text-lg font-medium">No hay módulos creados</p>
               <p className="text-sm mt-2">Haz clic en "Nuevo Módulo" para crear el primero</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {modulos.map((modulo) => {
-                const IconComponent = ICONOS.find(i => i.name === modulo.Icono)?.icon || FileText;
-                return (
-                  <Card key={modulo.ModuloId} className="hover:shadow-md transition-shadow">
-                    <CardContent className="pt-6">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="bg-blue-100 p-3 rounded-lg">
-                            <IconComponent className="h-6 w-6 text-blue-600" />
+            <div className="space-y-6">
+              {modulos
+                .filter(m => m.Tipo === "Principal")
+                .sort((a, b) => a.Orden - b.Orden)
+                .map((moduloPrincipal) => {
+                  const modulosSecundarios = modulos
+                    .filter(m => m.Tipo === "Secundario" && m.ModuloPrincipalId === moduloPrincipal.Id)
+                    .sort((a, b) => a.Orden - b.Orden);
+                  
+                  return (
+                    <div key={moduloPrincipal.Id} className="space-y-3">
+                      {/* Módulo Principal */}
+                      <div className="flex items-start gap-3">
+                        <ModuloCard modulo={moduloPrincipal} isPrincipal={true} />
+                        
+                        {/* Módulos Secundarios */}
+                        {modulosSecundarios.length > 0 && (
+                          <div className="flex-1 space-y-3">
+                            {modulosSecundarios.map((moduloSecundario) => (
+                              <ModuloCard key={moduloSecundario.Id} modulo={moduloSecundario} isPrincipal={false} />
+                            ))}
                           </div>
-                          <div>
-                            <h3 className="font-semibold text-lg">{modulo.Nombre}</h3>
-                            <p className="text-xs text-gray-500">{modulo.Tipo}</p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteModulo(modulo.ModuloId)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+                        )}
                       </div>
-                      <div className="mt-4 text-xs text-gray-500">
-                        <p>Tabla: <span className="font-mono">{modulo.NombreTabla}</span></p>
-                        <p>Orden: {modulo.Orden}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                    </div>
+                  );
+                })}
+              
+              {/* Módulos Secundarios sin Padre Asignado */}
+              {modulos.filter(m => m.Tipo === "Secundario" && !m.ModuloPrincipalId).length > 0 && (
+                <div className="mt-6 pt-6 border-t-2 border-yellow-300 dark:border-yellow-700">
+                  <h3 className="text-sm font-semibold text-yellow-700 dark:text-yellow-400 mb-3 flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    Módulos Secundarios sin Padre Asignado
+                  </h3>
+                  <div className="space-y-3">
+                    {modulos
+                      .filter(m => m.Tipo === "Secundario" && !m.ModuloPrincipalId)
+                      .map((modulo) => (
+                        <ModuloCard key={modulo.Id} modulo={modulo} isPrincipal={false} />
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
     </div>
   );
+
+  function ModuloCard({ modulo, isPrincipal }: { modulo: Modulo; isPrincipal: boolean }) {
+    const IconComponent = ICONOS.find(i => i.name === modulo.Icono)?.icon || FileText;
+    
+    return (
+      <Card className={`hover:shadow-md transition-shadow dark:border-gray-600 ${
+        isPrincipal 
+          ? 'dark:bg-gray-700 border-2 border-blue-300 dark:border-blue-700 min-w-[300px]' 
+          : 'dark:bg-gray-750 border dark:border-gray-600'
+      }`}>
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center space-x-3">
+              <div className={`p-2 rounded-lg ${
+                isPrincipal 
+                  ? 'bg-blue-100 dark:bg-blue-900/30' 
+                  : 'bg-gray-100 dark:bg-gray-800'
+              }`}>
+                <IconComponent className={`h-5 w-5 ${
+                  isPrincipal 
+                    ? 'text-blue-600 dark:text-blue-400' 
+                    : 'text-gray-600 dark:text-gray-400'
+                }`} />
+              </div>
+              <div>
+                <h3 className={`font-semibold dark:text-white ${isPrincipal ? 'text-base' : 'text-sm'}`}>
+                  {modulo.Nombre}
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {modulo.Tipo} {isPrincipal && `· Orden ${modulo.Orden}`}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleEditModulo(modulo.Id!)}
+              >
+                <Edit className="h-4 w-4 text-blue-500" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteModulo(modulo.Id!)}
+              >
+                <Trash2 className="h-4 w-4 text-red-500" />
+              </Button>
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+            <p className="truncate" title={modulo.NombreTabla}>
+              <span className="font-mono">{modulo.NombreTabla}</span>
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 }

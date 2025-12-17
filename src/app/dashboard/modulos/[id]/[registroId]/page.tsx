@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { usePermisos } from "@/hooks/usePermisos";
-import { ArrowLeft, Plus, Edit, Trash2, X, FileText } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, X, FileText, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown, Search } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -51,8 +52,15 @@ export default function DetalleRegistroPage() {
   const [campos, setCampos] = useState<Campo[]>([]);
   const [modulosSecundarios, setModulosSecundarios] = useState<ModuloSecundario[]>([]);
   const [registrosSecundarios, setRegistrosSecundarios] = useState<Record<number, any[]>>({});
+  const [registrosSecundariosFiltrados, setRegistrosSecundariosFiltrados] = useState<Record<number, any[]>>({});
+  const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
   const [valoresListas, setValoresListas] = useState<Record<number, any[]>>({});
   const [loading, setLoading] = useState(true);
+  
+  // Estado para controlar módulos secundarios expandidos/colapsados
+  const [expandedModulos, setExpandedModulos] = useState<Record<number, boolean>>({});
+  const [sortColumns, setSortColumns] = useState<Record<number, string | null>>({});
+  const [sortDirections, setSortDirections] = useState<Record<number, "asc" | "desc">>({});
   
   // Estado para formularios de módulos secundarios
   const [showSecundarioForm, setShowSecundarioForm] = useState<number | null>(null);
@@ -191,10 +199,49 @@ export default function DetalleRegistroPage() {
           ...prev,
           [moduloSecId]: data.data.registros,
         }));
+        setRegistrosSecundariosFiltrados(prev => ({
+          ...prev,
+          [moduloSecId]: data.data.registros,
+        }));
       }
     } catch (error) {
       console.error("Error cargando registros secundarios:", error);
     }
+  };
+
+  const handleSearchSecundario = (moduloSecId: number, term: string, campos: Campo[], registros: any[]) => {
+    setSearchTerms(prev => ({ ...prev, [moduloSecId]: term }));
+    
+    if (!term.trim()) {
+      setRegistrosSecundariosFiltrados(prev => ({
+        ...prev,
+        [moduloSecId]: registros,
+      }));
+      return;
+    }
+
+    const filtered = registros.filter((registro) => {
+      return campos.some((campo) => {
+        if (!campo.VisibleEnGrilla) return false;
+        const value = registro[campo.Nombre];
+        if (!value) return false;
+        
+        // Buscar en listas
+        if (campo.TipoDato === "Lista" && campo.ListaId && valoresListas[campo.ListaId]) {
+          const valorObj = valoresListas[campo.ListaId].find((v: any) => v.Id === parseInt(value));
+          if (valorObj && valorObj.Valor.toLowerCase().includes(term.toLowerCase())) {
+            return true;
+          }
+        }
+        
+        return String(value).toLowerCase().includes(term.toLowerCase());
+      });
+    });
+    
+    setRegistrosSecundariosFiltrados(prev => ({
+      ...prev,
+      [moduloSecId]: filtered,
+    }));
   };
 
   const handleSubmitSecundario = async (e: React.FormEvent, moduloSecId: number) => {
@@ -380,13 +427,57 @@ export default function DetalleRegistroPage() {
     setEditingSecundarioId(null);
   };
 
+  const toggleModuloSecundario = (moduloId: number) => {
+    setExpandedModulos((prev) => ({
+      ...prev,
+      [moduloId]: !prev[moduloId],
+    }));
+  };
+
+  const handleSortSecundario = (moduloId: number, columnName: string, registros: any[]) => {
+    let direction: "asc" | "desc" = "asc";
+    
+    if (sortColumns[moduloId] === columnName && sortDirections[moduloId] === "asc") {
+      direction = "desc";
+    }
+    
+    setSortColumns((prev) => ({ ...prev, [moduloId]: columnName }));
+    setSortDirections((prev) => ({ ...prev, [moduloId]: direction }));
+    
+    const sorted = [...registros].sort((a, b) => {
+      const aValue = a[columnName];
+      const bValue = b[columnName];
+      
+      if (aValue === null || aValue === undefined) return 1;
+      if (bValue === null || bValue === undefined) return -1;
+      
+      if (typeof aValue === "number" && typeof bValue === "number") {
+        return direction === "asc" ? aValue - bValue : bValue - aValue;
+      }
+      
+      const aStr = String(aValue).toLowerCase();
+      const bStr = String(bValue).toLowerCase();
+      
+      if (direction === "asc") {
+        return aStr.localeCompare(bStr);
+      } else {
+        return bStr.localeCompare(aStr);
+      }
+    });
+    
+    setRegistrosSecundariosFiltrados((prev) => ({
+      ...prev,
+      [moduloId]: sorted,
+    }));
+  };
+
   const renderInput = (campo: Campo, value: any, onChange: (name: string, value: any) => void) => {
     switch (campo.TipoDato) {
       case "Texto":
         return (
           <input
             type="text"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => onChange(campo.Nombre, e.target.value)}
             maxLength={campo.Largo || undefined}
@@ -397,7 +488,7 @@ export default function DetalleRegistroPage() {
       case "Descripcion":
         return (
           <textarea
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             rows={3}
             value={value}
             onChange={(e) => onChange(campo.Nombre, e.target.value)}
@@ -409,7 +500,7 @@ export default function DetalleRegistroPage() {
         return (
           <input
             type="number"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => onChange(campo.Nombre, e.target.value)}
             required={campo.Obligatorio}
@@ -420,7 +511,7 @@ export default function DetalleRegistroPage() {
         return (
           <input
             type="date"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => onChange(campo.Nombre, e.target.value)}
             required={campo.Obligatorio}
@@ -431,7 +522,7 @@ export default function DetalleRegistroPage() {
         return (
           <input
             type="datetime-local"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => onChange(campo.Nombre, e.target.value)}
             required={campo.Obligatorio}
@@ -442,7 +533,7 @@ export default function DetalleRegistroPage() {
         const valores = campo.ListaId ? valoresListas[campo.ListaId] || [] : [];
         return (
           <select
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => onChange(campo.Nombre, e.target.value)}
             required={campo.Obligatorio}
@@ -461,7 +552,7 @@ export default function DetalleRegistroPage() {
           <div className="space-y-2">
             <input
               type="file"
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
@@ -472,12 +563,12 @@ export default function DetalleRegistroPage() {
               required={campo.Obligatorio && !value && !archivosSecundarios[campo.Nombre]}
             />
             {value && !archivosSecundarios[campo.Nombre] && (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
                 Archivo actual: {value}
               </div>
             )}
             {archivosSecundarios[campo.Nombre] && (
-              <div className="text-sm text-green-600">
+              <div className="text-sm text-green-600 dark:text-green-400">
                 Nuevo archivo: {archivosSecundarios[campo.Nombre].name}
               </div>
             )}
@@ -488,7 +579,7 @@ export default function DetalleRegistroPage() {
         return (
           <input
             type="text"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => onChange(campo.Nombre, e.target.value)}
             required={campo.Obligatorio}
@@ -558,7 +649,7 @@ export default function DetalleRegistroPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Cargando...</div>
+        <div className="text-lg dark:text-white">Cargando...</div>
       </div>
     );
   }
@@ -566,7 +657,7 @@ export default function DetalleRegistroPage() {
   if (!modulo || !registro) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-red-500">Registro no encontrado</div>
+        <div className="text-lg text-red-500 dark:text-red-400">Registro no encontrado</div>
       </div>
     );
   }
@@ -584,27 +675,27 @@ export default function DetalleRegistroPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               {campos.find(c => c.VisibleEnGrilla)?.Nombre 
                 ? registro[campos.find(c => c.VisibleEnGrilla)!.Nombre]
                 : `Registro #${registroId}`}
             </h1>
-            <p className="text-gray-500 mt-1">Detalle de {modulo.Nombre.toLowerCase()}</p>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Detalle de {modulo.Nombre.toLowerCase()}</p>
           </div>
         </div>
       </div>
 
       {/* Información del registro principal */}
-      <Card>
+      <Card className="dark:bg-gray-800 dark:border-gray-700">
         <CardHeader>
-          <CardTitle>Información General</CardTitle>
+          <CardTitle className="dark:text-white">Información General</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {campos.map((campo) => (
               <div key={campo.Id}>
-                <Label className="text-gray-600">{campo.Nombre}</Label>
-                <div className="mt-1 text-gray-900 font-medium">
+                <Label className="text-gray-600 dark:text-gray-400">{campo.Nombre}</Label>
+                <div className="mt-1 text-gray-900 dark:text-gray-100 font-medium">
                   {renderCellValue(campo, registro[campo.Nombre])}
                 </div>
               </div>
@@ -616,18 +707,33 @@ export default function DetalleRegistroPage() {
       {/* Módulos secundarios */}
       {modulosSecundarios && modulosSecundarios.length > 0 && modulosSecundarios.map((moduloSec) => {
         const registros = registrosSecundarios[moduloSec.Id] || [];
+        const registrosFiltrados = registrosSecundariosFiltrados[moduloSec.Id] || registros;
+        const searchTerm = searchTerms[moduloSec.Id] || "";
         const camposVisiblesGrilla = (moduloSec.Campos || []).filter((c) => c.VisibleEnGrilla);
         const permisosModuloSec = getPermisosModulo(moduloSec.Id);
+        const isExpanded = expandedModulos[moduloSec.Id] || false;
 
         return (
-          <Card key={moduloSec.Id}>
-            <CardHeader>
+          <Card key={moduloSec.Id} className="dark:bg-gray-800 dark:border-gray-700">
+            <CardHeader 
+              className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              onClick={() => toggleModuloSecundario(moduloSec.Id)}
+            >
               <div className="flex justify-between items-center">
-                <CardTitle>{moduloSec.Nombre}</CardTitle>
-                {permisosModuloSec.agregar && (
+                <div className="flex items-center gap-2">
+                  <ChevronDown 
+                    className={`h-5 w-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                  />
+                  <CardTitle className="dark:text-white">{moduloSec.Nombre}</CardTitle>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    ({registros.length})
+                  </span>
+                </div>
+                {permisosModuloSec.agregar && isExpanded && (
                   <Button
                     size="sm"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       resetSecundarioForm(moduloSec.Campos);
                       setShowSecundarioForm(moduloSec.Id);
                     }}
@@ -638,12 +744,32 @@ export default function DetalleRegistroPage() {
                 )}
               </div>
             </CardHeader>
+            {isExpanded && (
             <CardContent>
+              {/* Barra de búsqueda */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+                  <Input
+                    type="text"
+                    placeholder={`Buscar en ${moduloSec.Nombre.toLowerCase()}...`}
+                    value={searchTerm}
+                    onChange={(e) => handleSearchSecundario(moduloSec.Id, e.target.value, moduloSec.Campos, registros)}
+                    className="pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                  />
+                </div>
+                {searchTerm && (
+                  <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    {registrosFiltrados.length} resultado{registrosFiltrados.length !== 1 ? 's' : ''} encontrado{registrosFiltrados.length !== 1 ? 's' : ''}
+                  </div>
+                )}
+              </div>
+
               {/* Formulario */}
               {showSecundarioForm === moduloSec.Id && (
-                <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+                <div className="mb-6 p-4 border rounded-lg bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-semibold">
+                    <h3 className="font-semibold dark:text-white">
                       {editingSecundarioId ? "Editar" : "Nuevo"} {moduloSec.Nombre.slice(0, -1)}
                     </h3>
                     <Button
@@ -662,7 +788,7 @@ export default function DetalleRegistroPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {moduloSec.Campos.filter(c => c.Visible).map((campo) => (
                         <div key={campo.Id}>
-                          <Label htmlFor={campo.Nombre}>
+                          <Label htmlFor={campo.Nombre} className="dark:text-gray-300">
                             {campo.Nombre}
                             {campo.Obligatorio && <span className="text-red-500 ml-1">*</span>}
                           </Label>
@@ -699,37 +825,51 @@ export default function DetalleRegistroPage() {
 
               {/* Tabla */}
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
                       {camposVisiblesGrilla.map((campo) => (
                         <th
                           key={campo.Id}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                          onClick={() => handleSortSecundario(moduloSec.Id, campo.Nombre, registrosFiltrados)}
                         >
-                          {campo.Nombre}
+                          <div className="flex items-center gap-2">
+                            <span>{campo.Nombre}</span>
+                            {sortColumns[moduloSec.Id] === campo.Nombre ? (
+                              sortDirections[moduloSec.Id] === "asc" ? (
+                                <ArrowUp className="h-3 w-3" />
+                              ) : (
+                                <ArrowDown className="h-3 w-3" />
+                              )
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-40" />
+                            )}
+                          </div>
                         </th>
                       ))}
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         Acciones
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {registros.length === 0 ? (
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {registrosFiltrados.length === 0 ? (
                       <tr>
                         <td
                           colSpan={camposVisiblesGrilla.length + 1}
-                          className="px-6 py-4 text-center text-gray-500"
+                          className="px-6 py-4 text-center text-gray-500 dark:text-gray-400"
                         >
-                          No hay registros. Haz clic en "Agregar" para crear el primero.
+                          {searchTerm 
+                            ? `No se encontraron resultados para "${searchTerm}"`
+                            : "No hay registros. Haz clic en \"Agregar\" para crear el primero."}
                         </td>
                       </tr>
                     ) : (
-                      registros.map((reg) => (
-                        <tr key={reg.Id} className="hover:bg-gray-50">
+                      registrosFiltrados.map((reg) => (
+                        <tr key={reg.Id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                           {camposVisiblesGrilla.map((campo) => (
-                            <td key={campo.Id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <td key={campo.Id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                               {renderCellValue(campo, reg[campo.Nombre])}
                             </td>
                           ))}
@@ -761,10 +901,12 @@ export default function DetalleRegistroPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-2 text-sm text-gray-500">
+              <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                 Total: {registros.length}
+                {searchTerm && ` (${registrosFiltrados.length} filtrado${registrosFiltrados.length !== 1 ? 's' : ''})`}
               </div>
             </CardContent>
+            )}
           </Card>
         );
       })}

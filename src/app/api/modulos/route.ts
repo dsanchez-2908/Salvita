@@ -274,6 +274,188 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PUT - Actualizar módulo
+export async function PUT(request: NextRequest) {
+  try {
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'No autenticado' },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'ID de módulo requerido' },
+        { status: 400 }
+      );
+    }
+
+    const body: CreateModuloRequest = await request.json();
+    const { Nombre, Tipo, ModuloPadreId, Icono, Orden, Campos } = body;
+
+    // Validar campos requeridos
+    if (!Nombre || !Tipo || !Campos || Campos.length === 0) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'Campos requeridos faltantes' },
+        { status: 400 }
+      );
+    }
+
+    // Obtener módulo actual para obtener NombreTabla
+    const moduloActual = await query<any>(
+      'SELECT NombreTabla, Nombre FROM TD_MODULOS WHERE Id = @id',
+      { id: parseInt(id) }
+    );
+
+    if (moduloActual.length === 0) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'Módulo no encontrado' },
+        { status: 404 }
+      );
+    }
+
+    const nombreTablaActual = moduloActual[0].NombreTabla;
+    const nombreTabla = `TD_MODULO_${Nombre.toUpperCase().replace(/ /g, '_')}`;
+
+    // Obtener campos actuales
+    const camposActuales = await query<any>(
+      'SELECT * FROM TD_CAMPOS WHERE ModuloId = @moduloId ORDER BY Orden',
+      { moduloId: parseInt(id) }
+    );
+
+    // Preparar ALTER TABLE para modificar columnas
+    const alterStatements: string[] = [];
+
+    // Comparar campos actuales con nuevos
+    const camposActualesMap = new Map(camposActuales.map((c: any) => [c.Nombre, c]));
+
+    // Solo detectar columnas a agregar (NO se eliminan campos para no perder datos)
+    for (const campoNuevo of Campos) {
+      const nombreColumna = sanitizeColumnName(campoNuevo.Nombre);
+      let tipoDato = '';
+
+      switch (campoNuevo.TipoDato) {
+        case 'Texto':
+          tipoDato = `NVARCHAR(${campoNuevo.Largo || 100})`;
+          break;
+        case 'Descripcion':
+          tipoDato = 'NVARCHAR(MAX)';
+          break;
+        case 'Numero':
+          tipoDato = 'INT';
+          break;
+        case 'Fecha':
+          tipoDato = 'DATE';
+          break;
+        case 'FechaHora':
+          tipoDato = 'DATETIME';
+          break;
+        case 'Lista':
+          tipoDato = 'INT';
+          break;
+        case 'Archivo':
+          tipoDato = 'NVARCHAR(500)';
+          break;
+      }
+
+      const nullable = campoNuevo.Obligatorio ? 'NOT NULL' : 'NULL';
+
+      if (!camposActualesMap.has(campoNuevo.Nombre)) {
+        // Nueva columna - siempre NULL al agregar para no romper datos existentes
+        alterStatements.push(
+          `ALTER TABLE [${nombreTablaActual}] ADD [${nombreColumna}] ${tipoDato} NULL`
+        );
+      } else {
+        // Campo existente - actualizar propiedades de largo si cambió
+        const campoActual = camposActualesMap.get(campoNuevo.Nombre);
+        if (campoNuevo.TipoDato === 'Texto' && campoActual.Largo !== campoNuevo.Largo) {
+          alterStatements.push(
+            `ALTER TABLE [${nombreTablaActual}] ALTER COLUMN [${nombreColumna}] ${tipoDato} ${nullable}`
+          );
+        }
+      }
+    }
+
+    // Ejecutar ALTER TABLE statements
+    for (const statement of alterStatements) {
+      await execute(statement);
+    }
+
+    // Si cambió el nombre del módulo, renombrar tabla
+    if (nombreTabla !== nombreTablaActual) {
+      await execute(`EXEC sp_rename '${nombreTablaActual}', '${nombreTabla.replace('TD_MODULO_', '')}'`);
+    }
+
+    // Actualizar registro del módulo
+    await execute(
+      `UPDATE TD_MODULOS SET 
+        Nombre = @nombre, 
+        Tipo = @tipo, 
+        ModuloPrincipalId = @moduloPrincipalId,
+        Icono = @icono,
+        Orden = @orden,
+        NombreTabla = @nombreTabla
+      WHERE Id = @id`,
+      {
+        id: parseInt(id),
+        nombre: Nombre,
+        tipo: Tipo,
+        moduloPrincipalId: ModuloPadreId || null,
+        icono: Icono || 'FileText',
+        orden: Orden || 1,
+        nombreTabla: nombreTabla
+      }
+    );
+
+    // Eliminar campos antiguos
+    await execute('DELETE FROM TD_CAMPOS WHERE ModuloId = @moduloId', {
+      moduloId: parseInt(id)
+    });
+
+    // Insertar campos actualizados
+    for (let i = 0; i < Campos.length; i++) {
+      const campo = Campos[i];
+      const nombreColumna = sanitizeColumnName(campo.Nombre);
+      
+      await execute(
+        `INSERT INTO TD_CAMPOS 
+         (ModuloId, Nombre, NombreColumna, TipoDato, Largo, ListaId, Orden, Visible, VisibleEnGrilla, Obligatorio, UsuarioCreacion)
+         VALUES (@moduloId, @nombre, @nombreColumna, @tipoDato, @largo, @listaId, @orden, @visible, @visibleEnGrilla, @obligatorio, @usuarioCreacion)`,
+        {
+          moduloId: parseInt(id),
+          nombre: campo.Nombre,
+          nombreColumna: nombreColumna,
+          tipoDato: campo.TipoDato,
+          largo: campo.Largo || null,
+          listaId: campo.ListaId || null,
+          orden: i + 1,
+          visible: campo.Visible ? 1 : 0,
+          visibleEnGrilla: campo.VisibleEnGrilla ? 1 : 0,
+          obligatorio: campo.Obligatorio ? 1 : 0,
+          usuarioCreacion: user.usuario,
+        }
+      );
+    }
+
+    return NextResponse.json<ApiResponse>({
+      success: true,
+      data: { Id: parseInt(id) },
+      message: 'Módulo actualizado exitosamente',
+    });
+  } catch (error: any) {
+    console.error('Error actualizando módulo:', error);
+    return NextResponse.json<ApiResponse>(
+      { success: false, error: error.message || 'Error en el servidor' },
+      { status: 500 }
+    );
+  }
+}
+
 // DELETE - Eliminar módulo
 export async function DELETE(request: NextRequest) {
   try {
