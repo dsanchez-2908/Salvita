@@ -230,6 +230,20 @@ export default function RolesPage() {
     });
   };
 
+  const getModuloPadre = (moduloId: number) => {
+    const modulo = modulos.find(m => m.Id === moduloId);
+    if (modulo && modulo.ModuloPrincipalId) {
+      const padre = modulos.find(m => m.Id === modulo.ModuloPrincipalId);
+      return padre ? padre.Nombre : null;
+    }
+    return null;
+  };
+
+  const getModuloInfo = (moduloId: number) => {
+    const modulo = modulos.find(m => m.Id === moduloId);
+    return modulo;
+  };
+
   const filteredRoles = roles.filter((r) =>
     r.Nombre.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -367,75 +381,266 @@ export default function RolesPage() {
 
                 <div className="space-y-2">
                   <Label>Permisos por Módulo</Label>
-                  <div className="border rounded-md p-4">
+                  <div className="border rounded-md p-4 max-h-[400px] overflow-y-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Módulo</TableHead>
-                          <TableHead className="text-center">Ver</TableHead>
-                          <TableHead className="text-center">Agregar</TableHead>
-                          <TableHead className="text-center">Modificar</TableHead>
-                          <TableHead className="text-center">Eliminar</TableHead>
+                          <TableHead className="w-1/3">Módulo</TableHead>
+                          <TableHead className="text-center w-[15%]">Ver</TableHead>
+                          <TableHead className="text-center w-[15%]">Agregar</TableHead>
+                          <TableHead className="text-center w-[15%]">Modificar</TableHead>
+                          <TableHead className="text-center w-[15%]">Eliminar</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {formData.Permisos.map((permiso) => (
-                          <TableRow key={permiso.ModuloId}>
-                            <TableCell>{permiso.ModuloNombre}</TableCell>
-                            <TableCell className="text-center">
-                              <input
-                                type="checkbox"
-                                checked={permiso.PermisoVer}
-                                onChange={(e) =>
-                                  updatePermiso(
-                                    permiso.ModuloId,
-                                    "PermisoVer",
-                                    e.target.checked
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <input
-                                type="checkbox"
-                                checked={permiso.PermisoAgregar}
-                                onChange={(e) =>
-                                  updatePermiso(
-                                    permiso.ModuloId,
-                                    "PermisoAgregar",
-                                    e.target.checked
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <input
-                                type="checkbox"
-                                checked={permiso.PermisoModificar}
-                                onChange={(e) =>
-                                  updatePermiso(
-                                    permiso.ModuloId,
-                                    "PermisoModificar",
-                                    e.target.checked
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <input
-                                type="checkbox"
-                                checked={permiso.PermisoEliminar}
-                                onChange={(e) =>
-                                  updatePermiso(
-                                    permiso.ModuloId,
-                                    "PermisoEliminar",
-                                    e.target.checked
-                                  )
-                                }
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {/* Primero módulos principales */}
+                        {formData.Permisos
+                          .filter((permiso) => {
+                            const modulo = getModuloInfo(permiso.ModuloId);
+                            return modulo && modulo.Tipo === "Principal";
+                          })
+                          .sort((a, b) => {
+                            const moduloA = getModuloInfo(a.ModuloId);
+                            const moduloB = getModuloInfo(b.ModuloId);
+                            return (moduloA?.Orden || 0) - (moduloB?.Orden || 0);
+                          })
+                          .map((permiso) => {
+                            const modulo = getModuloInfo(permiso.ModuloId);
+                            return (
+                              <>
+                                <TableRow key={permiso.ModuloId} className="bg-blue-50 dark:bg-blue-900/20 font-medium">
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-2 py-0.5 text-xs rounded bg-blue-600 text-white font-semibold">
+                                        Principal
+                                      </span>
+                                      <span className="font-semibold">{permiso.ModuloNombre}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={permiso.PermisoVer}
+                                      onChange={(e) =>
+                                        updatePermiso(
+                                          permiso.ModuloId,
+                                          "PermisoVer",
+                                          e.target.checked
+                                        )
+                                      }
+                                      className="w-4 h-4"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={permiso.PermisoAgregar}
+                                      onChange={(e) =>
+                                        updatePermiso(
+                                          permiso.ModuloId,
+                                          "PermisoAgregar",
+                                          e.target.checked
+                                        )
+                                      }
+                                      className="w-4 h-4"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={permiso.PermisoModificar}
+                                      onChange={(e) =>
+                                        updatePermiso(
+                                          permiso.ModuloId,
+                                          "PermisoModificar",
+                                          e.target.checked
+                                        )
+                                      }
+                                      className="w-4 h-4"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={permiso.PermisoEliminar}
+                                      onChange={(e) =>
+                                        updatePermiso(
+                                          permiso.ModuloId,
+                                          "PermisoEliminar",
+                                          e.target.checked
+                                        )
+                                      }
+                                      className="w-4 h-4"
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                                
+                                {/* Módulos secundarios de este principal */}
+                                {formData.Permisos
+                                  .filter((p) => {
+                                    const mod = getModuloInfo(p.ModuloId);
+                                    return mod && mod.Tipo === "Secundario" && mod.ModuloPrincipalId === permiso.ModuloId;
+                                  })
+                                  .sort((a, b) => {
+                                    const moduloA = getModuloInfo(a.ModuloId);
+                                    const moduloB = getModuloInfo(b.ModuloId);
+                                    return (moduloA?.Orden || 0) - (moduloB?.Orden || 0);
+                                  })
+                                  .map((permisoSec) => (
+                                    <TableRow key={permisoSec.ModuloId} className="bg-gray-50 dark:bg-gray-800/50">
+                                      <TableCell>
+                                        <div className="flex items-center gap-2 pl-8">
+                                          <span className="text-gray-400">└─</span>
+                                          <span className="px-2 py-0.5 text-xs rounded bg-gray-500 text-white">
+                                            Secundario
+                                          </span>
+                                          <span>{permisoSec.ModuloNombre}</span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <input
+                                          type="checkbox"
+                                          checked={permisoSec.PermisoVer}
+                                          onChange={(e) =>
+                                            updatePermiso(
+                                              permisoSec.ModuloId,
+                                              "PermisoVer",
+                                              e.target.checked
+                                            )
+                                          }
+                                          className="w-4 h-4"
+                                        />
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <input
+                                          type="checkbox"
+                                          checked={permisoSec.PermisoAgregar}
+                                          onChange={(e) =>
+                                            updatePermiso(
+                                              permisoSec.ModuloId,
+                                              "PermisoAgregar",
+                                              e.target.checked
+                                            )
+                                          }
+                                          className="w-4 h-4"
+                                        />
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <input
+                                          type="checkbox"
+                                          checked={permisoSec.PermisoModificar}
+                                          onChange={(e) =>
+                                            updatePermiso(
+                                              permisoSec.ModuloId,
+                                              "PermisoModificar",
+                                              e.target.checked
+                                            )
+                                          }
+                                          className="w-4 h-4"
+                                        />
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <input
+                                          type="checkbox"
+                                          checked={permisoSec.PermisoEliminar}
+                                          onChange={(e) =>
+                                            updatePermiso(
+                                              permisoSec.ModuloId,
+                                              "PermisoEliminar",
+                                              e.target.checked
+                                            )
+                                          }
+                                          className="w-4 h-4"
+                                        />
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                              </>
+                            );
+                          })}
+                        
+                        {/* Módulos secundarios sin padre asignado */}
+                        {formData.Permisos
+                          .filter((permiso) => {
+                            const modulo = getModuloInfo(permiso.ModuloId);
+                            return modulo && modulo.Tipo === "Secundario" && !modulo.ModuloPrincipalId;
+                          })
+                          .sort((a, b) => {
+                            const moduloA = getModuloInfo(a.ModuloId);
+                            const moduloB = getModuloInfo(b.ModuloId);
+                            return (moduloA?.Orden || 0) - (moduloB?.Orden || 0);
+                          })
+                          .map((permiso) => (
+                            <TableRow key={permiso.ModuloId} className="bg-yellow-50 dark:bg-yellow-900/20">
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 text-xs rounded bg-yellow-600 text-white">
+                                    Secundario
+                                  </span>
+                                  <span>{permiso.ModuloNombre}</span>
+                                  <span className="text-xs text-yellow-700 dark:text-yellow-400">
+                                    (sin padre asignado)
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={permiso.PermisoVer}
+                                  onChange={(e) =>
+                                    updatePermiso(
+                                      permiso.ModuloId,
+                                      "PermisoVer",
+                                      e.target.checked
+                                    )
+                                  }
+                                  className="w-4 h-4"
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={permiso.PermisoAgregar}
+                                  onChange={(e) =>
+                                    updatePermiso(
+                                      permiso.ModuloId,
+                                      "PermisoAgregar",
+                                      e.target.checked
+                                    )
+                                  }
+                                  className="w-4 h-4"
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={permiso.PermisoModificar}
+                                  onChange={(e) =>
+                                    updatePermiso(
+                                      permiso.ModuloId,
+                                      "PermisoModificar",
+                                      e.target.checked
+                                    )
+                                  }
+                                  className="w-4 h-4"
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={permiso.PermisoEliminar}
+                                  onChange={(e) =>
+                                    updatePermiso(
+                                      permiso.ModuloId,
+                                      "PermisoEliminar",
+                                      e.target.checked
+                                    )
+                                  }
+                                  className="w-4 h-4"
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
                       </TableBody>
                     </Table>
                   </div>

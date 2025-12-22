@@ -7,8 +7,22 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { usePermisos } from "@/hooks/usePermisos";
-import { Plus, Edit, Trash2, X, Eye, Search, ChevronLeft, ChevronRight, FileText, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Edit, Trash2, X, Eye, Search, ChevronLeft, ChevronRight, FileText, ArrowUpDown, ArrowUp, ArrowDown, Filter, FilterX } from "lucide-react";
 import { Label } from "@/components/ui/label";
+
+interface AdvancedFilter {
+  id: string;
+  campo: string;
+  operador: "igual" | "contiene" | "noContiene" | "mayor" | "menor" | "mayorIgual" | "menorIgual" | "entre";
+  valor: any;
+  valorHasta?: any;
+}
+
+interface CampoSistema {
+  Nombre: string;
+  TipoDato: string;
+  Visible: boolean;
+}
 
 interface Campo {
   Id: number;
@@ -53,7 +67,13 @@ export default function ModuloDinamicoPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const recordsPerPage = 10;
+  const [recordsPerPage, setRecordsPerPage] = useState(15);
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilter[]>([]);
+  const [camposSistema] = useState<CampoSistema[]>([
+    { Nombre: "FechaCreacion", TipoDato: "FechaHora", Visible: true },
+    { Nombre: "UsuarioCreacion", TipoDato: "Texto", Visible: true },
+  ]);
 
   useEffect(() => {
     loadData();
@@ -300,31 +320,194 @@ export default function ModuloDinamicoPage() {
   const handleSearch = (term: string) => {
     setSearchTerm(term);
     setCurrentPage(1);
-    
-    if (!term.trim()) {
-      setRegistrosFiltrados(registros);
-      return;
+    applyFilters(term, advancedFilters);
+  };
+
+  const applyFilters = (searchTerm: string, filters: AdvancedFilter[]) => {
+    let filtered = [...registros];
+
+    // Aplicar búsqueda simple
+    if (searchTerm.trim()) {
+      filtered = filtered.filter((registro) => {
+        return campos.some((campo) => {
+          if (!campo.VisibleEnGrilla) return false;
+          const value = registro[campo.Nombre];
+          if (!value) return false;
+          
+          // Buscar en listas
+          if (campo.TipoDato === "Lista" && campo.ListaId && valoresListas[campo.ListaId]) {
+            const valorObj = valoresListas[campo.ListaId].find((v: any) => v.Id === parseInt(value));
+            if (valorObj && valorObj.Valor.toLowerCase().includes(searchTerm.toLowerCase())) {
+              return true;
+            }
+          }
+          
+          return String(value).toLowerCase().includes(searchTerm.toLowerCase());
+        });
+      });
     }
 
-    const filtered = registros.filter((registro) => {
-      return campos.some((campo) => {
-        if (!campo.VisibleEnGrilla) return false;
-        const value = registro[campo.Nombre];
-        if (!value) return false;
+    // Aplicar filtros avanzados
+    filters.forEach((filter) => {
+      if (!filter.campo || !filter.operador) return;
+
+      const campo = [...campos, ...camposSistema].find(c => c.Nombre === filter.campo);
+      if (!campo) return;
+
+      filtered = filtered.filter((registro) => {
+        const value = registro[filter.campo];
         
-        // Buscar en listas
-        if (campo.TipoDato === "Lista" && campo.ListaId && valoresListas[campo.ListaId]) {
-          const valorObj = valoresListas[campo.ListaId].find((v: any) => v.Id === parseInt(value));
-          if (valorObj && valorObj.Valor.toLowerCase().includes(term.toLowerCase())) {
-            return true;
+        if (campo.TipoDato === "Fecha" || campo.TipoDato === "FechaHora") {
+          const recordDate = value ? new Date(value) : null;
+          if (!recordDate) return false;
+          
+          switch (filter.operador) {
+            case "igual":
+              if (!filter.valor) return true;
+              const targetDate = new Date(filter.valor);
+              return recordDate.toDateString() === targetDate.toDateString();
+            case "mayor":
+              if (!filter.valor) return true;
+              return recordDate > new Date(filter.valor);
+            case "menor":
+              if (!filter.valor) return true;
+              return recordDate < new Date(filter.valor);
+            case "mayorIgual":
+              if (!filter.valor) return true;
+              return recordDate >= new Date(filter.valor);
+            case "menorIgual":
+              if (!filter.valor) return true;
+              return recordDate <= new Date(filter.valor);
+            case "entre":
+              if (!filter.valor || !filter.valorHasta) return true;
+              const fromDate = new Date(filter.valor);
+              const toDate = new Date(filter.valorHasta);
+              toDate.setHours(23, 59, 59, 999);
+              return recordDate >= fromDate && recordDate <= toDate;
+            default:
+              return true;
+          }
+        } else if (campo.TipoDato === "Numero") {
+          const numValue = parseFloat(value);
+          if (isNaN(numValue)) return false;
+          
+          switch (filter.operador) {
+            case "igual":
+              return numValue === parseFloat(filter.valor);
+            case "mayor":
+              return numValue > parseFloat(filter.valor);
+            case "menor":
+              return numValue < parseFloat(filter.valor);
+            case "mayorIgual":
+              return numValue >= parseFloat(filter.valor);
+            case "menorIgual":
+              return numValue <= parseFloat(filter.valor);
+            case "entre":
+              return numValue >= parseFloat(filter.valor) && numValue <= parseFloat(filter.valorHasta);
+            default:
+              return true;
+          }
+        } else if (campo.TipoDato === "Lista") {
+          if (filter.operador === "igual") {
+            return value == filter.valor;
+          }
+          return true;
+        } else {
+          // Texto, Descripcion
+          const strValue = String(value || "").toLowerCase();
+          const filterValue = String(filter.valor || "").toLowerCase();
+          
+          switch (filter.operador) {
+            case "igual":
+              return strValue === filterValue;
+            case "contiene":
+              return strValue.includes(filterValue);
+            case "noContiene":
+              return !strValue.includes(filterValue);
+            default:
+              return true;
           }
         }
-        
-        return String(value).toLowerCase().includes(term.toLowerCase());
       });
     });
     
     setRegistrosFiltrados(filtered);
+  };
+
+  const addFilter = () => {
+    const newFilter: AdvancedFilter = {
+      id: crypto.randomUUID(),
+      campo: "",
+      operador: "igual",
+      valor: "",
+    };
+    setAdvancedFilters([...advancedFilters, newFilter]);
+  };
+
+  const removeFilter = (id: string) => {
+    const newFilters = advancedFilters.filter(f => f.id !== id);
+    setAdvancedFilters(newFilters);
+    setCurrentPage(1);
+    applyFilters(searchTerm, newFilters);
+  };
+
+  const updateFilter = (id: string, updates: Partial<AdvancedFilter>) => {
+    const newFilters = advancedFilters.map(f => 
+      f.id === id ? { ...f, ...updates } : f
+    );
+    setAdvancedFilters(newFilters);
+    setCurrentPage(1);
+    applyFilters(searchTerm, newFilters);
+  };
+
+  const clearAdvancedFilters = () => {
+    setAdvancedFilters([]);
+    setCurrentPage(1);
+    applyFilters(searchTerm, []);
+  };
+
+  const hasActiveFilters = () => {
+    return advancedFilters.some(f => f.campo && f.valor);
+  };
+
+  const getOperadoresPorTipo = (tipoDato: string) => {
+    switch (tipoDato) {
+      case "Fecha":
+      case "FechaHora":
+        return [
+          { value: "igual", label: "Igual a" },
+          { value: "mayor", label: "Después de" },
+          { value: "menor", label: "Antes de" },
+          { value: "mayorIgual", label: "Desde" },
+          { value: "menorIgual", label: "Hasta" },
+          { value: "entre", label: "Entre" },
+        ];
+      case "Numero":
+        return [
+          { value: "igual", label: "Igual a" },
+          { value: "mayor", label: "Mayor que" },
+          { value: "menor", label: "Menor que" },
+          { value: "mayorIgual", label: "Mayor o igual a" },
+          { value: "menorIgual", label: "Menor o igual a" },
+          { value: "entre", label: "Entre" },
+        ];
+      case "Lista":
+        return [
+          { value: "igual", label: "Igual a" },
+        ];
+      default: // Texto, Descripcion
+        return [
+          { value: "igual", label: "Igual a" },
+          { value: "contiene", label: "Contiene" },
+          { value: "noContiene", label: "No contiene" },
+        ];
+    }
+  };
+
+  const getCamposDisponibles = () => {
+    // Incluir todos los campos excepto los de tipo Archivo
+    const camposUsuario = campos.filter(c => c.TipoDato !== "Archivo");
+    return [...camposUsuario, ...camposSistema];
   };
 
   const handleSort = (columnName: string) => {
@@ -589,19 +772,210 @@ export default function ModuloDinamicoPage() {
 
       {/* Barra de búsqueda */}
       <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md dark:shadow-gray-900/50">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
-          <Input
-            type="text"
-            placeholder={`Buscar en ${modulo.Nombre.toLowerCase()}...`}
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+            <Input
+              type="text"
+              placeholder={`Buscar en ${modulo.Nombre.toLowerCase()}...`}
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+            />
+          </div>
+          <Button
+            variant={showAdvancedSearch ? "default" : "outline"}
+            onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+            className="flex items-center gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Búsqueda Avanzada
+          </Button>
+          {hasActiveFilters() && (
+            <Button
+              variant="ghost"
+              onClick={clearAdvancedFilters}
+              className="flex items-center gap-2 text-red-600 hover:text-red-700 dark:text-red-400"
+            >
+              <FilterX className="h-4 w-4" />
+              Limpiar
+            </Button>
+          )}
         </div>
-        {searchTerm && (
+        {(searchTerm || hasActiveFilters()) && (
           <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             {registrosFiltrados.length} resultado{registrosFiltrados.length !== 1 ? 's' : ''} encontrado{registrosFiltrados.length !== 1 ? 's' : ''}
+            {hasActiveFilters() && ` (con filtros avanzados)`}
+          </div>
+        )}
+        
+        {/* Panel de búsqueda avanzada */}
+        {showAdvancedSearch && (
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Filtros Avanzados</h3>
+              <Button
+                size="sm"
+                onClick={addFilter}
+                className="flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Agregar Filtro
+              </Button>
+            </div>
+            
+            {advancedFilters.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <Filter className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No hay filtros agregados</p>
+                <p className="text-xs mt-1">Haz clic en "Agregar Filtro" para comenzar</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {advancedFilters.map((filter, index) => {
+                  const campo = getCamposDisponibles().find(c => c.Nombre === filter.campo);
+                  const operadores = campo ? getOperadoresPorTipo(campo.TipoDato) : [];
+                  
+                  return (
+                    <div key={filter.id} className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-2">
+                        {/* Selector de Campo */}
+                        <div className="md:col-span-4">
+                          <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1">Campo</Label>
+                          <select
+                            value={filter.campo}
+                            onChange={(e) => {
+                              updateFilter(filter.id, { 
+                                campo: e.target.value,
+                                operador: "igual",
+                                valor: "",
+                                valorHasta: undefined
+                              });
+                            }}
+                            className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 dark:bg-gray-600 dark:text-white"
+                          >
+                            <option value="">Seleccionar campo...</option>
+                            <optgroup label="Campos del módulo">
+                              {campos.filter(c => c.TipoDato !== "Archivo").map((c) => (
+                                <option key={c.Id} value={c.Nombre}>
+                                  {c.Nombre}
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Campos del sistema">
+                              {camposSistema.map((c) => (
+                                <option key={c.Nombre} value={c.Nombre}>
+                                  {c.Nombre}
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </div>
+                        
+                        {/* Selector de Operador */}
+                        {filter.campo && (
+                          <div className="md:col-span-3">
+                            <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1">Condición</Label>
+                            <select
+                              value={filter.operador}
+                              onChange={(e) => updateFilter(filter.id, { operador: e.target.value as any })}
+                              className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 dark:bg-gray-600 dark:text-white"
+                            >
+                              {operadores.map((op) => (
+                                <option key={op.value} value={op.value}>
+                                  {op.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        
+                        {/* Campo(s) de Valor */}
+                        {filter.campo && campo && (
+                          <div className={filter.operador === "entre" ? "md:col-span-4" : "md:col-span-5"}>
+                            <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1">Valor</Label>
+                            <div className="flex gap-2">
+                              {/* Valor principal o "desde" para operador "entre" */}
+                              {campo.TipoDato === "Lista" ? (
+                                <select
+                                  value={filter.valor || ""}
+                                  onChange={(e) => updateFilter(filter.id, { valor: e.target.value })}
+                                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 dark:bg-gray-600 dark:text-white"
+                                >
+                                  <option value="">Seleccionar...</option>
+                                  {campo.ListaId && valoresListas[campo.ListaId]?.map((valor: any) => (
+                                    <option key={valor.Id} value={valor.Id}>
+                                      {valor.Valor}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (campo.TipoDato === "Fecha" || campo.TipoDato === "FechaHora") ? (
+                                <>
+                                  <Input
+                                    type="date"
+                                    value={filter.valor || ""}
+                                    onChange={(e) => updateFilter(filter.id, { valor: e.target.value })}
+                                    className="text-sm dark:bg-gray-600 dark:border-gray-500 dark:text-white"
+                                    placeholder={filter.operador === "entre" ? "Desde" : "Fecha"}
+                                  />
+                                  {filter.operador === "entre" && (
+                                    <Input
+                                      type="date"
+                                      value={filter.valorHasta || ""}
+                                      onChange={(e) => updateFilter(filter.id, { valorHasta: e.target.value })}
+                                      className="text-sm dark:bg-gray-600 dark:border-gray-500 dark:text-white"
+                                      placeholder="Hasta"
+                                    />
+                                  )}
+                                </>
+                              ) : campo.TipoDato === "Numero" ? (
+                                <>
+                                  <Input
+                                    type="number"
+                                    value={filter.valor || ""}
+                                    onChange={(e) => updateFilter(filter.id, { valor: e.target.value })}
+                                    className="text-sm dark:bg-gray-600 dark:border-gray-500 dark:text-white"
+                                    placeholder={filter.operador === "entre" ? "Desde" : "Valor"}
+                                  />
+                                  {filter.operador === "entre" && (
+                                    <Input
+                                      type="number"
+                                      value={filter.valorHasta || ""}
+                                      onChange={(e) => updateFilter(filter.id, { valorHasta: e.target.value })}
+                                      className="text-sm dark:bg-gray-600 dark:border-gray-500 dark:text-white"
+                                      placeholder="Hasta"
+                                    />
+                                  )}
+                                </>
+                              ) : (
+                                <Input
+                                  type="text"
+                                  value={filter.valor || ""}
+                                  onChange={(e) => updateFilter(filter.id, { valor: e.target.value })}
+                                  className="text-sm dark:bg-gray-600 dark:border-gray-500 dark:text-white"
+                                  placeholder="Valor..."
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Botón Eliminar */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeFilter(filter.id)}
+                        className="mt-5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -756,14 +1130,33 @@ export default function ModuloDinamicoPage() {
       </div>
 
       {/* Paginación */}
-      {registrosFiltrados.length > recordsPerPage && (
+      {registrosFiltrados.length > 0 && (
         <div className="flex items-center justify-between bg-white dark:bg-gray-800 px-4 py-3 rounded-lg shadow-md dark:shadow-gray-900/50">
-          <div className="text-sm text-gray-700 dark:text-gray-300">
+          <div className="flex items-center space-x-4">
+            <div className="text-sm text-gray-700 dark:text-gray-300">
+              <label className="mr-2">Registros por página:</label>
+              <select
+                value={recordsPerPage}
+                onChange={(e) => {
+                  setRecordsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 dark:bg-gray-700 dark:text-white"
+              >
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+            <div className="text-sm text-gray-700 dark:text-gray-300">
             Mostrando <span className="font-medium">{indexOfFirstRecord + 1}</span> a{" "}
             <span className="font-medium">
               {Math.min(indexOfLastRecord, registrosFiltrados.length)}
             </span>{" "}
             de <span className="font-medium">{registrosFiltrados.length}</span> registros
+            </div>
           </div>
           <div className="flex space-x-2">
             <Button

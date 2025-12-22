@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { usePermisos } from "@/hooks/usePermisos";
-import { ArrowLeft, Plus, Edit, Trash2, X, FileText, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown, Search } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, X, FileText, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -61,6 +61,10 @@ export default function DetalleRegistroPage() {
   const [expandedModulos, setExpandedModulos] = useState<Record<number, boolean>>({});
   const [sortColumns, setSortColumns] = useState<Record<number, string | null>>({});
   const [sortDirections, setSortDirections] = useState<Record<number, "asc" | "desc">>({});
+  
+  // Estado para paginación de módulos secundarios
+  const [currentPages, setCurrentPages] = useState<Record<number, number>>({});
+  const [recordsPerPages, setRecordsPerPages] = useState<Record<number, number>>({});
   
   // Estado para formularios de módulos secundarios
   const [showSecundarioForm, setShowSecundarioForm] = useState<number | null>(null);
@@ -211,6 +215,7 @@ export default function DetalleRegistroPage() {
 
   const handleSearchSecundario = (moduloSecId: number, term: string, campos: Campo[], registros: any[]) => {
     setSearchTerms(prev => ({ ...prev, [moduloSecId]: term }));
+    setCurrentPages(prev => ({ ...prev, [moduloSecId]: 1 }));
     
     if (!term.trim()) {
       setRegistrosSecundariosFiltrados(prev => ({
@@ -712,6 +717,14 @@ export default function DetalleRegistroPage() {
         const camposVisiblesGrilla = (moduloSec.Campos || []).filter((c) => c.VisibleEnGrilla);
         const permisosModuloSec = getPermisosModulo(moduloSec.Id);
         const isExpanded = expandedModulos[moduloSec.Id] || false;
+        
+        // Paginación
+        const currentPage = currentPages[moduloSec.Id] || 1;
+        const recordsPerPage = recordsPerPages[moduloSec.Id] || 15;
+        const indexOfLastRecord = currentPage * recordsPerPage;
+        const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+        const currentRecords = registrosFiltrados.slice(indexOfFirstRecord, indexOfLastRecord);
+        const totalPages = Math.ceil(registrosFiltrados.length / recordsPerPage);
 
         return (
           <Card key={moduloSec.Id} className="dark:bg-gray-800 dark:border-gray-700">
@@ -866,7 +879,7 @@ export default function DetalleRegistroPage() {
                         </td>
                       </tr>
                     ) : (
-                      registrosFiltrados.map((reg) => (
+                      currentRecords.map((reg) => (
                         <tr key={reg.Id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                           {camposVisiblesGrilla.map((campo) => (
                             <td key={campo.Id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
@@ -901,10 +914,88 @@ export default function DetalleRegistroPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Total: {registros.length}
-                {searchTerm && ` (${registrosFiltrados.length} filtrado${registrosFiltrados.length !== 1 ? 's' : ''})`}
-              </div>
+              
+              {/* Paginación y contador */}
+              {registrosFiltrados.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        <label className="mr-2">Registros por página:</label>
+                        <select
+                          value={recordsPerPage}
+                          onChange={(e) => {
+                            setRecordsPerPages(prev => ({ ...prev, [moduloSec.Id]: Number(e.target.value) }));
+                            setCurrentPages(prev => ({ ...prev, [moduloSec.Id]: 1 }));
+                          }}
+                          className="border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 dark:bg-gray-700 dark:text-white"
+                        >
+                          <option value={10}>10</option>
+                          <option value={15}>15</option>
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                      </div>
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        Mostrando <span className="font-medium">{indexOfFirstRecord + 1}</span> a{" "}
+                        <span className="font-medium">
+                          {Math.min(indexOfLastRecord, registrosFiltrados.length)}
+                        </span>{" "}
+                        de <span className="font-medium">{registrosFiltrados.length}</span> registros
+                        {searchTerm && ` (filtrados de ${registros.length})`}
+                      </div>
+                    </div>
+                    {totalPages > 1 && (
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPages(prev => ({ ...prev, [moduloSec.Id]: currentPage - 1 }))}
+                          disabled={currentPage === 1}
+                        >
+                          <ChevronLeft className="h-4 w-4 mr-1" />
+                          Anterior
+                        </Button>
+                        <div className="flex items-center space-x-1">
+                          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                            let page;
+                            if (totalPages <= 7) {
+                              page = i + 1;
+                            } else if (currentPage <= 4) {
+                              page = i + 1;
+                            } else if (currentPage >= totalPages - 3) {
+                              page = totalPages - 6 + i;
+                            } else {
+                              page = currentPage - 3 + i;
+                            }
+                            return (
+                              <Button
+                                key={page}
+                                variant={currentPage === page ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPages(prev => ({ ...prev, [moduloSec.Id]: page }))}
+                                className="w-10"
+                              >
+                                {page}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPages(prev => ({ ...prev, [moduloSec.Id]: currentPage + 1 }))}
+                          disabled={currentPage === totalPages}
+                        >
+                          Siguiente
+                          <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
             )}
           </Card>

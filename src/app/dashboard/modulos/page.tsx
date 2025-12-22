@@ -971,11 +971,6 @@ export default function ModulosPage() {
               </Button>
             </div>
           </div>
-          <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-            <p className="truncate" title={modulo.NombreTabla}>
-              <span className="font-mono">{modulo.NombreTabla}</span>
-            </p>
-          </div>
         </CardContent>
       </Card>
     );
