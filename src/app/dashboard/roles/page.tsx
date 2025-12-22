@@ -59,6 +59,7 @@ export default function RolesPage() {
             ModuloId: m.Id,
             ModuloNombre: m.Nombre,
             PermisoVer: true,
+            PermisoVerAgrupado: false,
             PermisoAgregar: false,
             PermisoModificar: false,
             PermisoEliminar: false,
@@ -385,11 +386,12 @@ export default function RolesPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-1/3">Módulo</TableHead>
-                          <TableHead className="text-center w-[15%]">Ver</TableHead>
-                          <TableHead className="text-center w-[15%]">Agregar</TableHead>
-                          <TableHead className="text-center w-[15%]">Modificar</TableHead>
-                          <TableHead className="text-center w-[15%]">Eliminar</TableHead>
+                          <TableHead className="w-1/4">Módulo</TableHead>
+                          <TableHead className="text-center w-[12%]">Ver</TableHead>
+                          <TableHead className="text-center w-[12%]">Ver Agrupado</TableHead>
+                          <TableHead className="text-center w-[12%]">Agregar</TableHead>
+                          <TableHead className="text-center w-[12%]">Modificar</TableHead>
+                          <TableHead className="text-center w-[12%]">Eliminar</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -425,6 +427,20 @@ export default function RolesPage() {
                                         updatePermiso(
                                           permiso.ModuloId,
                                           "PermisoVer",
+                                          e.target.checked
+                                        )
+                                      }
+                                      className="w-4 h-4"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={permiso.PermisoVerAgrupado}
+                                      onChange={(e) =>
+                                        updatePermiso(
+                                          permiso.ModuloId,
+                                          "PermisoVerAgrupado",
                                           e.target.checked
                                         )
                                       }
@@ -511,6 +527,9 @@ export default function RolesPage() {
                                           className="w-4 h-4"
                                         />
                                       </TableCell>
+                                      <TableCell className="text-center bg-gray-100 dark:bg-gray-900">
+                                        {/* Ver Agrupado no aplica a secundarios */}
+                                      </TableCell>
                                       <TableCell className="text-center">
                                         <input
                                           type="checkbox"
@@ -596,6 +615,9 @@ export default function RolesPage() {
                                   }
                                   className="w-4 h-4"
                                 />
+                              </TableCell>
+                              <TableCell className="text-center bg-gray-100 dark:bg-gray-900">
+                                {/* Ver Agrupado no aplica a secundarios */}
                               </TableCell>
                               <TableCell className="text-center">
                                 <input

@@ -161,6 +161,7 @@ export interface LoginResponse {
     Nombre: string;
     Usuario: string;
     Roles: string[];
+    Permisos?: any[];
   };
 }
 

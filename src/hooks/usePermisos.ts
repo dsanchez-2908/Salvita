@@ -4,6 +4,7 @@ interface Permiso {
   ModuloId: number;
   ModuloNombre: string;
   PermisoVer: number;
+  PermisoVerAgrupado: number;
   PermisoAgregar: number;
   PermisoModificar: number;
   PermisoEliminar: number;
@@ -11,6 +12,7 @@ interface Permiso {
 
 interface PermisosUsuario {
   ver: boolean;
+  verAgrupado: boolean;
   agregar: boolean;
   modificar: boolean;
   eliminar: boolean;
@@ -19,6 +21,7 @@ interface PermisosUsuario {
 export function usePermisos(moduloId?: string | number) {
   const [permisos, setPermisos] = useState<PermisosUsuario>({
     ver: false,
+    verAgrupado: false,
     agregar: false,
     modificar: false,
     eliminar: false,
@@ -41,6 +44,7 @@ export function usePermisos(moduloId?: string | number) {
       if (admin) {
         setPermisos({
           ver: true,
+          verAgrupado: true,
           agregar: true,
           modificar: true,
           eliminar: true,
@@ -52,6 +56,7 @@ export function usePermisos(moduloId?: string | number) {
       if (!moduloId) {
         setPermisos({
           ver: false,
+          verAgrupado: false,
           agregar: false,
           modificar: false,
           eliminar: false,
@@ -68,6 +73,7 @@ export function usePermisos(moduloId?: string | number) {
       if (permisoModulo) {
         setPermisos({
           ver: permisoModulo.PermisoVer === 1,
+          verAgrupado: permisoModulo.PermisoVerAgrupado === 1,
           agregar: permisoModulo.PermisoAgregar === 1,
           modificar: permisoModulo.PermisoModificar === 1,
           eliminar: permisoModulo.PermisoEliminar === 1,
@@ -75,6 +81,7 @@ export function usePermisos(moduloId?: string | number) {
       } else {
         setPermisos({
           ver: false,
+          verAgrupado: false,
           agregar: false,
           modificar: false,
           eliminar: false,

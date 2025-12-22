@@ -117,8 +117,8 @@ export async function POST(request: NextRequest) {
       for (const permiso of Permisos) {
         await execute(
           `INSERT INTO TR_ROL_MODULO_PERMISO 
-           (RolId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, UsuarioAsignacion)
-           VALUES (@rolId, @moduloId, @agregar, @modificar, @eliminar, @ver, @usuarioAsignacion)`,
+           (RolId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, PermisoVerAgrupado, UsuarioAsignacion)
+           VALUES (@rolId, @moduloId, @agregar, @modificar, @eliminar, @ver, @verAgrupado, @usuarioAsignacion)`,
           {
             rolId: nuevoRolId,
             moduloId: permiso.ModuloId,
@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
             modificar: permiso.PermisoModificar ? 1 : 0,
             eliminar: permiso.PermisoEliminar ? 1 : 0,
             ver: permiso.PermisoVer ? 1 : 0,
+            verAgrupado: permiso.PermisoVerAgrupado ? 1 : 0,
             usuarioAsignacion: user.usuario,
           }
         );
@@ -205,8 +206,8 @@ export async function PUT(request: NextRequest) {
       for (const permiso of Permisos) {
         await execute(
           `INSERT INTO TR_ROL_MODULO_PERMISO 
-           (RolId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, UsuarioAsignacion)
-           VALUES (@rolId, @moduloId, @agregar, @modificar, @eliminar, @ver, @usuarioAsignacion)`,
+           (RolId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, PermisoVerAgrupado, UsuarioAsignacion)
+           VALUES (@rolId, @moduloId, @agregar, @modificar, @eliminar, @ver, @verAgrupado, @usuarioAsignacion)`,
           {
             rolId: parseInt(id),
             moduloId: permiso.ModuloId,
@@ -214,6 +215,7 @@ export async function PUT(request: NextRequest) {
             modificar: permiso.PermisoModificar ? 1 : 0,
             eliminar: permiso.PermisoEliminar ? 1 : 0,
             ver: permiso.PermisoVer ? 1 : 0,
+            verAgrupado: permiso.PermisoVerAgrupado ? 1 : 0,
             usuarioAsignacion: user.usuario,
           }
         );

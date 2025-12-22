@@ -757,17 +757,28 @@ export default function ModuloDinamicoPage() {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{modulo.Nombre}</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">Gestión de {modulo.Nombre.toLowerCase()}</p>
         </div>
-        {permisos.agregar && (
-          <Button
-            onClick={() => {
-              resetForm();
-              setShowForm(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {modulo.Tipo === "Principal" && permisos.verAgrupado && (
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/dashboard/modulos/${moduloId}/agrupado`)}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Vista Agrupada
+            </Button>
+          )}
+          {permisos.agregar && (
+            <Button
+              onClick={() => {
+                resetForm();
+                setShowForm(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Barra de búsqueda */}
