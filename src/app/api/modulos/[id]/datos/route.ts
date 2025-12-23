@@ -30,7 +30,7 @@ export async function GET(
     }
 
     const modulo = moduloResult.recordset[0];
-    const tableName = `TD_MODULO_${modulo.Nombre.toUpperCase()}`;
+    const tableName = modulo.NombreTabla;
 
     // Obtener campos del módulo
     const camposResult = await pool
@@ -73,7 +73,7 @@ export async function GET(
     const datosResult = await dbRequest.query(`
         SELECT Id, ${selectColumns}, Estado, FechaCreacion, FechaModificacion, 
                UsuarioCreacion, UsuarioModificacion
-        FROM ${tableName} 
+        FROM [${tableName}]
         ${whereClause}
         ORDER BY Id DESC
       `);

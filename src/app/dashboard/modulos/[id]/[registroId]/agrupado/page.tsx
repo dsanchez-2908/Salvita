@@ -23,16 +23,18 @@ export default function VistaAgrupadaPage() {
   const router = useRouter();
   const { toast } = useToast();
   const moduloId = params.id as string;
+  const registroId = params.registroId as string;
 
   const [registros, setRegistros] = useState<RegistroAgrupado[]>([]);
   const [registrosFiltrados, setRegistrosFiltrados] = useState<RegistroAgrupado[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [modulo, setModulo] = useState<any>(null);
+  const [registroPrincipal, setRegistroPrincipal] = useState<any>(null);
 
   useEffect(() => {
     loadData();
-  }, [moduloId]);
+  }, [moduloId, registroId]);
 
   useEffect(() => {
     if (searchTerm) {
@@ -65,8 +67,19 @@ export default function VistaAgrupadaPage() {
         setModulo(moduloData.data);
       }
 
+      // Cargar información del registro principal
+      const registroRes = await fetch(`/api/modulos/${moduloId}/datos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const registroData = await registroRes.json();
+      
+      if (registroData.success) {
+        const regPrincipal = registroData.data.registros.find((r: any) => r.Id === parseInt(registroId));
+        setRegistroPrincipal(regPrincipal);
+      }
+
       // Cargar registros agrupados
-      const response = await fetch(`/api/modulos/${moduloId}/agrupado`, {
+      const response = await fetch(`/api/modulos/${moduloId}/${registroId}/agrupado`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -83,7 +96,7 @@ export default function VistaAgrupadaPage() {
         });
         if (response.status === 403) {
           // No tiene permisos, redirigir
-          router.push(`/dashboard/modulos/${moduloId}`);
+          router.push(`/dashboard/modulos/${moduloId}/${registroId}`);
         }
       }
     } catch (error) {
@@ -138,6 +151,17 @@ export default function VistaAgrupadaPage() {
     }
   };
 
+  const getRegistroPrincipalNombre = () => {
+    if (!registroPrincipal) return `Registro #${registroId}`;
+    
+    // Buscar el primer campo visible para usar como título
+    const primerValor = Object.entries(registroPrincipal).find(([key, value]) => 
+      !key.startsWith('_') && key !== 'Id' && key !== 'Estado' && value
+    );
+    
+    return primerValor ? primerValor[1] as string : `Registro #${registroId}`;
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -154,17 +178,17 @@ export default function VistaAgrupadaPage() {
         <div className="flex items-center gap-4">
           <Button
             variant="outline"
-            onClick={() => router.push(`/dashboard/modulos/${moduloId}`)}
+            onClick={() => router.push(`/dashboard/modulos/${moduloId}/${registroId}`)}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Volver
           </Button>
           <div>
             <h1 className="text-3xl font-bold">
-              Vista Agrupada - {modulo?.Nombre || "Módulo"}
+              Historial de {getRegistroPrincipalNombre()}
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Historial completo de todos los registros secundarios
+              Registros consolidados de todos los módulos secundarios
             </p>
           </div>
         </div>
@@ -247,7 +271,7 @@ export default function VistaAgrupadaPage() {
                     .map((campo: any) => (
                       <div key={campo.Nombre} className="space-y-1">
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {campo.Etiqueta || campo.Nombre}
+                          {campo.Nombre}
                         </p>
                         <p className="text-sm font-medium">
                           {renderCampoValor(campo, registro[campo.Nombre])}

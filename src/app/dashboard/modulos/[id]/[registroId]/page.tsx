@@ -688,6 +688,15 @@ export default function DetalleRegistroPage() {
             <p className="text-gray-500 dark:text-gray-400 mt-1">Detalle de {modulo.Nombre.toLowerCase()}</p>
           </div>
         </div>
+        {modulo.Tipo === "Principal" && permisosModuloPrincipal.verAgrupado && (
+          <Button
+            variant="outline"
+            onClick={() => router.push(`/dashboard/modulos/${moduloId}/${registroId}/agrupado`)}
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Vista Agrupada
+          </Button>
+        )}
       </div>
 
       {/* Información del registro principal */}

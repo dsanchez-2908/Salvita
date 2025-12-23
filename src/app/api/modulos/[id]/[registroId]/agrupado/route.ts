@@ -3,10 +3,10 @@ import { query } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { ApiResponse } from '@/types';
 
-// GET - Obtener registros agrupados de todos los módulos secundarios
+// GET - Obtener registros agrupados de todos los módulos secundarios para un registro específico
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string; registroId: string } }
 ) {
   try {
     const user = getUserFromRequest(request);
@@ -18,6 +18,7 @@ export async function GET(
     }
 
     const moduloId = parseInt(params.id);
+    const registroId = parseInt(params.registroId);
 
     // Verificar que el módulo existe y es principal
     const modulo = await query(
@@ -56,35 +57,53 @@ export async function GET(
       });
     }
 
-    // Para cada módulo secundario, obtener sus registros con FechaCreacion
+    // Para cada módulo secundario, obtener sus registros relacionados con el registro principal
     const registrosAgrupados: any[] = [];
 
     for (const moduloSec of modulosSecundarios) {
       try {
-        // Obtener campos del módulo secundario
+        // Obtener campos del módulo secundario con información de listas
         const campos = await query(
-          `SELECT Nombre, TipoDato, VisibleEnGrilla, Orden
-           FROM TD_MODULOS_CAMPOS
-           WHERE ModuloId = @moduloId AND Estado = 'Activo'
-           ORDER BY Orden`,
+          `SELECT c.Nombre, c.NombreColumna, c.TipoDato, c.VisibleEnGrilla, c.Orden, c.ListaId, l.Nombre as ListaNombre
+           FROM TD_CAMPOS c
+           LEFT JOIN TD_LISTAS l ON c.ListaId = l.Id
+           WHERE c.ModuloId = @moduloId
+           ORDER BY c.Orden`,
           { moduloId: moduloSec.Id }
         );
 
-        // Construir lista de campos a seleccionar (primeros 5 campos visibles + FechaCreacion)
+        // Construir lista de campos a seleccionar usando NombreColumna con alias Nombre
         const camposVisibles = campos
-          .filter((c: any) => c.VisibleEnGrilla)
-          .slice(0, 5)
-          .map((c: any) => c.Nombre);
+          .filter((c: any) => c.VisibleEnGrilla);
 
-        const selectFields = ['Id', 'FechaCreacion', ...camposVisibles].join(', ');
+        // Para campos tipo lista, hacer JOIN con la tabla de valores de lista
+        const selectParts = ['mt.Id', 'mt.FechaCreacion'];
+        const joins: string[] = [];
+        
+        camposVisibles.forEach((campo: any, index: number) => {
+          if (campo.TipoDato === 'Lista' && campo.ListaId) {
+            const alias = `lv${index}`;
+            joins.push(`LEFT JOIN TD_VALORES_LISTA ${alias} ON ${alias}.ListaId = ${campo.ListaId} AND mt.[${campo.NombreColumna}] = ${alias}.Id`);
+            selectParts.push(`${alias}.Valor AS [${campo.Nombre}]`);
+          } else {
+            selectParts.push(`mt.[${campo.NombreColumna}] AS [${campo.Nombre}]`);
+          }
+        });
 
-        // Obtener registros del módulo secundario
+        const selectFields = selectParts.join(', ');
+        const joinClause = joins.join(' ');
+
+        // Obtener registros del módulo secundario filtrados por el registro principal
+        // El campo de relación usa el patrón: NombreTabla_Id (con guión bajo)
+        const campoRelacion = `${modulo[0].NombreTabla}_Id`;
+        
         const registros = await query(
-          `SELECT TOP 100 ${selectFields}
-           FROM ${moduloSec.NombreTabla}
-           WHERE Estado = 'Activo'
-           ORDER BY FechaCreacion DESC`
-        );
+          `SELECT ${selectFields}
+           FROM ${moduloSec.NombreTabla} mt
+           ${joinClause}
+           WHERE mt.[${campoRelacion}] = @registroId
+           ORDER BY mt.FechaCreacion DESC`
+        , { registroId });
 
         // Agregar metadata del módulo a cada registro
         registros.forEach((registro: any) => {

@@ -190,7 +190,7 @@ export default function ModulosPage() {
     const requestData = {
       Nombre: formData.Nombre,
       Tipo: formData.Tipo,
-      ModuloPadreId: formData.ModuloPadreId,
+      ModuloPrincipalId: formData.ModuloPadreId,
       Icono: formData.Icono,
       Orden: formData.Orden,
       Campos: campos.map(({ tempId, ...campo }) => campo),
