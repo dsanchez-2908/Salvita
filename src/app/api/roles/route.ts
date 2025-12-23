@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute } from '@/lib/db';
-import { getUserFromRequest } from '@/lib/auth';
+import { getUserFromRequest, registrarTraza } from '@/lib/auth';
 import { ApiResponse, CreateRolRequest } from '@/types';
 
 // GET - Obtener roles
@@ -133,6 +133,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Agregar',
+      'Roles',
+      `Rol creado: ${Nombre}. Permisos asignados: ${Permisos?.length || 0}`
+    );
+
     return NextResponse.json<ApiResponse>({
       success: true,
       data: { Id: nuevoRolId },
@@ -170,6 +178,13 @@ export async function PUT(request: NextRequest) {
 
     const body: any = await request.json();
     const { Nombre, Descripcion, Estado, Permisos } = body;
+
+    // Construir lista de cambios para traza
+    const cambios: string[] = [];
+    if (Nombre) cambios.push(`Nombre: ${Nombre}`);
+    if (Descripcion !== undefined) cambios.push('Descripción');
+    if (Estado) cambios.push(`Estado: ${Estado}`);
+    if (Permisos) cambios.push('Permisos');
 
     // Actualizar rol
     let updateQuery = 'UPDATE TD_ROLES SET FechaModificacion = GETDATE(), UsuarioModificacion = @usuarioModificacion';
@@ -222,6 +237,14 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Modificar',
+      'Roles',
+      `Rol modificado (ID: ${id}). Cambios: ${cambios.join(', ')}`
+    );
+
     return NextResponse.json<ApiResponse>({
       success: true,
       message: 'Rol actualizado exitosamente',
@@ -269,9 +292,19 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    const nombreRol = rol[0]?.Nombre || 'Desconocido';
+
     await execute('DELETE FROM TD_ROLES WHERE Id = @id', {
       id: parseInt(id),
     });
+
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Eliminar',
+      'Roles',
+      `Rol eliminado: ${nombreRol}`
+    );
 
     return NextResponse.json<ApiResponse>({
       success: true,

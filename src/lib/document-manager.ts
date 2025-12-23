@@ -165,6 +165,61 @@ class DocumentManagerClient {
       throw new Error('No se pudo generar la URL del visor');
     }
   }
+
+  async updateDocumentMetadata(
+    documentId: string,
+    metadatos: Record<string, any>
+  ): Promise<void> {
+    try {
+      const token = await this.getToken();
+      const urlBase = await this.getParameter('URL BASE Modificar Documento');
+      const libreria = await this.getParameter('Codigo libreria');
+
+      const metadatosJson = JSON.stringify(metadatos);
+
+      console.log('=== DEBUG UPDATE METADATA ===');
+      console.log('URL:', `${urlBase}/${documentId}?disableSuscription=false`);
+      console.log('Document ID:', documentId);
+      console.log('Metadata JSON:', metadatosJson);
+
+      // Crear FormData con el JSON y sin archivo
+      const formData = new FormData();
+      const jsonPayload = {
+        properties: [
+          {
+            name: 'metadatos',
+            value: metadatosJson,
+          },
+        ],
+        security: [],
+      };
+      
+      formData.append('Json', JSON.stringify(jsonPayload));
+      formData.append('File', ''); // Archivo vacío
+
+      const response = await axios.put(
+        `${urlBase}/${documentId}?disableSuscription=false`,
+        formData,
+        {
+          headers: {
+            'accept': '*/*',
+            'x-library': libreria,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      console.log('✅ Metadatos actualizados correctamente');
+      console.log('Response:', response.status);
+    } catch (error: any) {
+      console.error('❌ Error actualizando metadatos:', error.response?.data || error);
+      console.error('Error status:', error.response?.status);
+      throw new Error(
+        `Error al actualizar metadatos: ${error.response?.data?.message || error.message}`
+      );
+    }
+  }
 }
 
 export const documentManager = new DocumentManagerClient();

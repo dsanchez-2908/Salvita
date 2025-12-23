@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute } from '@/lib/db';
-import { getUserFromRequest, hashPassword } from '@/lib/auth';
+import { getUserFromRequest, hashPassword, registrarTraza } from '@/lib/auth';
 import { ApiResponse, Usuario, CreateUsuarioRequest, UpdateUsuarioRequest } from '@/types';
 
 // GET - Obtener todos los usuarios o uno específico
@@ -144,6 +144,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Agregar',
+      'Usuarios',
+      `Usuario creado: ${usuarioNombre} (${Nombre}). Roles asignados: ${Roles?.length || 0}`
+    );
+
     return NextResponse.json<ApiResponse>({
       success: true,
       data: { Id: nuevoUsuarioId },
@@ -228,6 +236,20 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // Registrar traza
+    const cambios = [];
+    if (Nombre) cambios.push(`Nombre: ${Nombre}`);
+    if (usuarioNombre) cambios.push(`Usuario: ${usuarioNombre}`);
+    if (Estado) cambios.push(`Estado: ${Estado}`);
+    if (Roles) cambios.push(`Roles actualizados: ${Roles.length}`);
+    
+    await registrarTraza(
+      user.userId,
+      'Modificar',
+      'Usuarios',
+      `Usuario modificado (ID: ${id}). Cambios: ${cambios.join(', ')}`
+    );
+
     return NextResponse.json<ApiResponse>({
       success: true,
       message: 'Usuario actualizado exitosamente',
@@ -270,9 +292,25 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Obtener datos del usuario antes de eliminarlo
+    const usuarioData = await query(
+      'SELECT Usuario, Nombre FROM TD_USUARIOS WHERE Id = @id',
+      { id: parseInt(id) }
+    );
+
     await execute('DELETE FROM TD_USUARIOS WHERE Id = @id', {
       id: parseInt(id),
     });
+
+    // Registrar traza
+    if (usuarioData.length > 0) {
+      await registrarTraza(
+        user.userId,
+        'Eliminar',
+        'Usuarios',
+        `Usuario eliminado: ${usuarioData[0].Usuario} (${usuarioData[0].Nombre})`
+      );
+    }
 
     return NextResponse.json<ApiResponse>({
       success: true,

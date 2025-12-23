@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getConnection } from "@/lib/db";
 import sql from "mssql";
-import { verifyToken } from "@/lib/auth";
+import { verifyToken, getUserFromRequest, verificarPermiso, registrarTraza } from "@/lib/auth";
+import { documentManager } from "@/lib/document-manager";
 
 // GET - Obtener todos los registros de un módulo
 export async function GET(
@@ -9,12 +10,22 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = request.headers.get("authorization")?.split(" ")[1];
-    if (!token || !verifyToken(token)) {
-      return NextResponse.json({ success: false, message: "No autorizado" }, { status: 401 });
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
     }
 
     const moduloId = parseInt(params.id);
+    
+    // Verificar permiso de Ver
+    const tienePermiso = await verificarPermiso(user.userId, moduloId, 'ver');
+    if (!tienePermiso) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "No tienes permisos para ver este módulo" 
+      }, { status: 403 });
+    }
+
     const pool = await getConnection();
     const { searchParams } = new URL(request.url);
     const parentId = searchParams.get("parentId");
@@ -101,13 +112,22 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = request.headers.get("authorization")?.split(" ")[1];
-    const decodedToken = verifyToken(token || "");
-    if (!decodedToken) {
-      return NextResponse.json({ success: false, message: "No autorizado" }, { status: 401 });
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
     }
 
     const moduloId = parseInt(params.id);
+    
+    // Verificar permiso de Agregar
+    const tienePermiso = await verificarPermiso(user.userId, moduloId, 'agregar');
+    if (!tienePermiso) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "No tienes permisos para agregar registros en este módulo" 
+      }, { status: 403 });
+    }
+
     const body = await request.json();
     const pool = await getConnection();
 
@@ -192,7 +212,7 @@ export async function POST(
     paramNames.push("@Estado", "@FechaCreacion", "@UsuarioCreacion");
     dbRequest.input("Estado", sql.NVarChar, "Activo");
     dbRequest.input("FechaCreacion", sql.DateTime, new Date());
-    dbRequest.input("UsuarioCreacion", sql.NVarChar, decodedToken.Usuario);
+    dbRequest.input("UsuarioCreacion", sql.NVarChar, user.usuario);
 
     const insertQuery = `
       INSERT INTO ${tableName} (${columnNames.join(", ")})
@@ -202,9 +222,54 @@ export async function POST(
 
     const result = await dbRequest.query(insertQuery);
 
+    const registroCreado = result.recordset[0].Id;
+
+    // Actualizar metadatos en documentos del gestor documental
+    const camposArchivo = campos.filter((c: any) => c.TipoDato === 'Archivo');
+    for (const campo of camposArchivo) {
+      const documentId = body[campo.Nombre];
+      if (documentId) {
+        try {
+          // Crear objeto con todos los metadatos del registro
+          const metadatos: Record<string, any> = {
+            moduloId: moduloId,
+            moduloNombre: modulo.Nombre,
+            registroId: registroCreado,
+          };
+          
+          // Agregar todos los campos del registro como metadatos
+          campos.forEach((c: any) => {
+            const valor = body[c.Nombre];
+            if (valor !== undefined && valor !== null && valor !== "") {
+              metadatos[c.Nombre] = valor;
+            }
+          });
+
+          await documentManager.updateDocumentMetadata(documentId, metadatos);
+          console.log(`✅ Metadatos actualizados para documento ${documentId}`);
+        } catch (metadataError) {
+          console.error(`Error actualizando metadatos del documento ${documentId}:`, metadataError);
+          // No fallar la operación si falla la actualización de metadatos
+        }
+      }
+    }
+
+    // Registrar traza
+    const camposData = campos.map((c: any) => {
+      const val = body[c.Nombre];
+      return val !== undefined && val !== null && val !== "" ? `${c.Nombre}: ${val}` : null;
+    }).filter(Boolean).join(", ");
+    
+    await registrarTraza(
+      user.userId,
+      'Agregar',
+      `Módulo: ${modulo.Nombre}`,
+      `Registro creado (ID: ${registroCreado}). ${camposData || 'Sin datos'}`
+    );
+
     return NextResponse.json({
       success: true,
-      data: { id: result.recordset[0].Id },
+      data: { id: registroCreado },
       message: "Registro creado exitosamente",
     });
   } catch (error: any) {
@@ -222,13 +287,21 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = request.headers.get("authorization")?.split(" ")[1];
-    const decodedToken = verifyToken(token || "");
-    if (!decodedToken) {
-      return NextResponse.json({ success: false, message: "No autorizado" }, { status: 401 });
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
     }
 
     const moduloId = parseInt(params.id);
+    
+    // Verificar permiso de Modificar
+    const tienePermiso = await verificarPermiso(user.userId, moduloId, 'modificar');
+    if (!tienePermiso) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "No tienes permisos para modificar registros en este módulo" 
+      }, { status: 403 });
+    }
     const body = await request.json();
     const registroId = body.id;
 
@@ -297,7 +370,7 @@ export async function PUT(
     setStatements.push("FechaModificacion = @FechaModificacion");
     setStatements.push("UsuarioModificacion = @UsuarioModificacion");
     dbRequest.input("FechaModificacion", sql.DateTime, new Date());
-    dbRequest.input("UsuarioModificacion", sql.NVarChar, decodedToken.Usuario);
+    dbRequest.input("UsuarioModificacion", sql.NVarChar, user.usuario);
 
     const updateQuery = `
       UPDATE ${tableName}
@@ -306,6 +379,49 @@ export async function PUT(
     `;
 
     await dbRequest.query(updateQuery);
+
+    // Actualizar metadatos en documentos del gestor documental
+    const camposArchivo = campos.filter((c: any) => c.TipoDato === 'Archivo');
+    for (const campo of camposArchivo) {
+      const documentId = body[campo.Nombre];
+      if (documentId) {
+        try {
+          // Crear objeto con todos los metadatos del registro
+          const metadatos: Record<string, any> = {
+            moduloId: moduloId,
+            moduloNombre: modulo.Nombre,
+            registroId: registroId,
+          };
+          
+          // Agregar todos los campos del registro como metadatos
+          campos.forEach((c: any) => {
+            const valor = body[c.Nombre];
+            if (valor !== undefined && valor !== null && valor !== "") {
+              metadatos[c.Nombre] = valor;
+            }
+          });
+
+          await documentManager.updateDocumentMetadata(documentId, metadatos);
+          console.log(`✅ Metadatos actualizados para documento ${documentId}`);
+        } catch (metadataError) {
+          console.error(`Error actualizando metadatos del documento ${documentId}:`, metadataError);
+          // No fallar la operación si falla la actualización de metadatos
+        }
+      }
+    }
+
+    // Registrar traza
+    const cambios = campos.map((c: any) => {
+      const val = body[c.Nombre];
+      return val !== undefined ? `${c.Nombre}: ${val}` : null;
+    }).filter(Boolean).join(", ");
+    
+    await registrarTraza(
+      user.userId,
+      'Modificar',
+      `Módulo: ${modulo.Nombre}`,
+      `Registro modificado (ID: ${registroId}). Cambios: ${cambios || 'Sin cambios'}`
+    );
 
     return NextResponse.json({
       success: true,
@@ -323,13 +439,22 @@ export async function PUT(
 // DELETE - Eliminar registro (soft delete)
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const token = request.headers.get("authorization")?.split(" ")[1];
-    const decodedToken = verifyToken(token || "");
-    if (!decodedToken) {
-      return NextResponse.json({ success: false, message: "No autorizado" }, { status: 401 });
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
     }
 
     const moduloId = parseInt(params.id);
+    
+    // Verificar permiso de Eliminar
+    const tienePermiso = await verificarPermiso(user.userId, moduloId, 'eliminar');
+    if (!tienePermiso) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "No tienes permisos para eliminar registros en este módulo" 
+      }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const registroId = searchParams.get("registroId");
 
@@ -357,7 +482,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       .input("Id", sql.Int, parseInt(registroId))
       .input("Estado", sql.NVarChar, "Inactivo")
       .input("FechaModificacion", sql.DateTime, new Date())
-      .input("UsuarioModificacion", sql.NVarChar, decodedToken.Usuario)
+      .input("UsuarioModificacion", sql.NVarChar, user.usuario)
       .query(`
         UPDATE ${tableName}
         SET Estado = @Estado,
@@ -365,6 +490,14 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
             UsuarioModificacion = @UsuarioModificacion
         WHERE Id = @Id
       `);
+
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Eliminar',
+      `Módulo: ${modulo.Nombre}`,
+      `Registro eliminado (ID: ${registroId})`
+    );
 
     return NextResponse.json({
       success: true,

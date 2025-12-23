@@ -77,7 +77,7 @@ export default function ModulosPage() {
   const [formData, setFormData] = useState({
     Nombre: "",
     Tipo: "Principal" as TipoModulo,
-    ModuloPadreId: null as number | null,
+    ModuloPrincipalId: null as number | null,
     Icono: "FileText",
     Orden: 1,
   });
@@ -190,7 +190,7 @@ export default function ModulosPage() {
     const requestData = {
       Nombre: formData.Nombre,
       Tipo: formData.Tipo,
-      ModuloPrincipalId: formData.ModuloPadreId,
+      ModuloPrincipalId: formData.ModuloPrincipalId,
       Icono: formData.Icono,
       Orden: formData.Orden,
       Campos: campos.map(({ tempId, ...campo }) => campo),
@@ -243,7 +243,7 @@ export default function ModulosPage() {
     setFormData({
       Nombre: "",
       Tipo: "Principal",
-      ModuloPadreId: null,
+      ModuloPrincipalId: null,
       Icono: "FileText",
       Orden: modulos.length + 1,
     });
@@ -333,7 +333,7 @@ export default function ModulosPage() {
         setFormData({
           Nombre: modulo.Nombre,
           Tipo: modulo.Tipo,
-          ModuloPadreId: modulo.ModuloPrincipalId || modulo.ModuloPadreId,
+          ModuloPrincipalId: modulo.ModuloPrincipalId,
           Icono: modulo.Icono || "FileText",
           Orden: modulo.Orden,
         });
@@ -540,13 +540,13 @@ export default function ModulosPage() {
                             <select
                               id="moduloPadre"
                               className="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                              value={formData.ModuloPadreId?.toString() || ""}
+                              value={formData.ModuloPrincipalId?.toString() || ""}
                               onChange={(e) => {
                                 const newValue = e.target.value ? parseInt(e.target.value) : null;
                                 console.log("Seleccionando módulo padre:", newValue, "valor del evento:", e.target.value);
                                 setFormData({
                                   ...formData,
-                                  ModuloPadreId: newValue,
+                                  ModuloPrincipalId: newValue,
                                 });
                               }}
                               required
@@ -618,14 +618,9 @@ export default function ModulosPage() {
                   {/* Campos */}
                   <Card className="border-2 dark:border-gray-700 dark:bg-gray-800">
                     <CardHeader className="pb-3">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <CardTitle className="text-lg dark:text-white">Campos del Módulo</CardTitle>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Arrastra para reordenar</p>
-                        </div>
-                        <Button type="button" size="sm" onClick={addCampo}>
-                          <Plus className="mr-2 h-4 w-4" /> Agregar Campo
-                        </Button>
+                      <div>
+                        <CardTitle className="text-lg dark:text-white">Campos del Módulo</CardTitle>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Arrastra para reordenar</p>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -778,6 +773,12 @@ export default function ModulosPage() {
                           )}
                         </Droppable>
                       </DragDropContext>
+                      
+                      <div className="mt-4 flex justify-center">
+                        <Button type="button" onClick={addCampo} variant="outline" className="w-full max-w-md">
+                          <Plus className="mr-2 h-4 w-4" /> Agregar Campo
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
 

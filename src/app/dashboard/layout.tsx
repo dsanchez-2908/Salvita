@@ -38,9 +38,11 @@ export default function DashboardLayout({
 }) {
   const [user, setUser] = useState<User | null>(null);
   const [projectName, setProjectName] = useState("Salvita");
+  const [logoUrl, setLogoUrl] = useState("");
   const [modulos, setModulos] = useState<any[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [configOpen, setConfigOpen] = useState(false);
+  const [consultasOpen, setConsultasOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
@@ -55,23 +57,33 @@ export default function DashboardLayout({
     }
 
     setUser(JSON.parse(userData));
-    loadProjectName();
+    loadProjectInfo();
     loadModulos(token);
   }, [router]);
 
-  const loadProjectName = async () => {
+  const loadProjectInfo = async () => {
     try {
-      const response = await fetch("/api/parametros?parametro=Nombre%20Proyecto", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
+      const token = localStorage.getItem("token");
+      
+      // Cargar nombre del proyecto
+      const nameResponse = await fetch("/api/parametros?parametro=Nombre%20Proyecto", {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await response.json();
-      if (data.success && data.data) {
-        setProjectName(data.data.Valor);
+      const nameData = await nameResponse.json();
+      if (nameData.success && nameData.data) {
+        setProjectName(nameData.data.Valor);
+      }
+
+      // Cargar logo del sistema
+      const logoResponse = await fetch("/api/parametros?parametro=Logo%20Sistema", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const logoData = await logoResponse.json();
+      if (logoData.success && logoData.data && logoData.data.Valor) {
+        setLogoUrl(logoData.data.Valor);
       }
     } catch (error) {
-      console.error("Error cargando nombre del proyecto:", error);
+      console.error("Error cargando información del proyecto:", error);
     }
   };
 
@@ -84,10 +96,28 @@ export default function DashboardLayout({
       });
       const data = await response.json();
       if (data.success) {
+        // Obtener permisos del usuario
+        const userData = localStorage.getItem("user");
+        const user = userData ? JSON.parse(userData) : null;
+        const isUserAdmin = user?.Roles?.includes("Administrador");
+        
         // Filtrar solo módulos principales e independientes
-        const modulosPrincipales = data.data.filter(
+        let modulosPrincipales = data.data.filter(
           (m: any) => m.Tipo === "Principal" || m.Tipo === "Independiente"
         );
+        
+        // Si no es administrador, filtrar por permisos de Ver
+        if (!isUserAdmin && user?.Permisos) {
+          const permisosMap = new Map(
+            user.Permisos.map((p: any) => [p.ModuloId, p])
+          );
+          
+          modulosPrincipales = modulosPrincipales.filter((modulo: any) => {
+            const permiso = permisosMap.get(modulo.Id);
+            return permiso && permiso.PermisoVer === 1;
+          });
+        }
+        
         setModulos(modulosPrincipales);
       }
     } catch (error) {
@@ -121,6 +151,9 @@ export default function DashboardLayout({
               >
                 <Menu className="h-5 w-5" />
               </Button>
+              {logoUrl && (
+                <img src={logoUrl} alt="Logo" className="h-8 object-contain" />
+              )}
               <h1 className="text-xl font-bold text-primary">{projectName}</h1>
             </div>
             <div className="flex items-center space-x-2">
@@ -208,6 +241,51 @@ export default function DashboardLayout({
                       >
                         <Folder className="mr-2 h-4 w-4" />
                         Módulos
+                      </Button>
+                    </Link>
+                    <Link href="/dashboard/parametros">
+                      <Button
+                        variant={pathname === "/dashboard/parametros" ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        size="sm"
+                      >
+                        <Settings className="mr-2 h-4 w-4" />
+                        Parámetros
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Menú de Consultas - Visible según permisos */}
+            {(isAdmin || modulos.some(m => m.Nombre === 'Trazas')) && (
+              <div>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between"
+                  onClick={() => setConsultasOpen(!consultasOpen)}
+                >
+                  <div className="flex items-center">
+                    <FileText className="mr-2 h-4 w-4" />
+                    Consultas
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      consultasOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </Button>
+                {consultasOpen && (
+                  <div className="ml-4 mt-2 space-y-2">
+                    <Link href="/dashboard/trazas">
+                      <Button
+                        variant={pathname === "/dashboard/trazas" ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        size="sm"
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        Auditoría
                       </Button>
                     </Link>
                   </div>

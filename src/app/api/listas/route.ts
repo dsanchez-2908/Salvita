@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute } from '@/lib/db';
-import { getUserFromRequest } from '@/lib/auth';
+import { getUserFromRequest, registrarTraza } from '@/lib/auth';
 import { ApiResponse, CreateListaRequest } from '@/types';
 
 // GET - Obtener listas
@@ -130,7 +130,13 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Agregar',
+      'Listas',
+      `Lista creada: ${Nombre}`
+    );
     return NextResponse.json<ApiResponse>({
       success: true,
       data: { Id: nuevaListaId },
@@ -168,6 +174,13 @@ export async function PUT(request: NextRequest) {
 
     const body: any = await request.json();
     const { Nombre, Descripcion, Estado, Valores } = body;
+
+    // Construir lista de cambios para traza
+    const cambios: string[] = [];
+    if (Nombre) cambios.push(`Nombre: ${Nombre}`);
+    if (Descripcion !== undefined) cambios.push('Descripción');
+    if (Estado) cambios.push(`Estado: ${Estado}`);
+    if (Valores) cambios.push('Valores');
 
     // Actualizar lista
     let updateQuery = 'UPDATE TD_LISTAS SET FechaModificacion = GETDATE(), UsuarioModificacion = @usuarioModificacion';
@@ -214,7 +227,13 @@ export async function PUT(request: NextRequest) {
         );
       }
     }
-
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Modificar',
+      'Listas',
+      `Lista modificada (ID: ${id}). Cambios: ${cambios.join(', ')}`
+    );
     return NextResponse.json<ApiResponse>({
       success: true,
       message: 'Lista actualizada exitosamente',
@@ -249,6 +268,21 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Obtener nombre de la lista antes de eliminar
+    const lista = await query(
+      'SELECT Nombre FROM TD_LISTAS WHERE Id = @id',
+      { id: parseInt(id) }
+    );
+
+    if (lista.length === 0) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'Lista no encontrada' },
+        { status: 404 }
+      );
+    }
+
+    const nombreLista = lista[0].Nombre;
+
     // Verificar si la lista está siendo usada en campos
     const usada = await query(
       'SELECT COUNT(*) as Cuenta FROM TD_CAMPOS WHERE ListaId = @listaId',
@@ -265,6 +299,14 @@ export async function DELETE(request: NextRequest) {
     await execute('DELETE FROM TD_LISTAS WHERE Id = @id', {
       id: parseInt(id),
     });
+
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Eliminar',
+      'Listas',
+      `Lista eliminada: ${nombreLista}`
+    );
 
     return NextResponse.json<ApiResponse>({
       success: true,

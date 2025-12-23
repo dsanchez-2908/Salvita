@@ -118,7 +118,27 @@ export default function DetalleRegistroPage() {
       if (moduloData.success) {
         setModulo(moduloData.data);
         setCampos(moduloData.data.Campos || []);
-        setModulosSecundarios(moduloData.data.ModulosSecundarios || []);
+        
+        // Filtrar módulos secundarios según permisos del usuario
+        const userData = localStorage.getItem("user");
+        const user = userData ? JSON.parse(userData) : null;
+        const isAdmin = user?.Roles?.includes("Administrador");
+        
+        let modulosSecFiltrados = moduloData.data.ModulosSecundarios || [];
+        
+        if (!isAdmin && user?.Permisos) {
+          const permisosMap = new Map(
+            user.Permisos.map((p: any) => [p.ModuloId, p])
+          );
+          
+          // Solo incluir módulos secundarios a los que el usuario tiene permiso de Ver
+          modulosSecFiltrados = modulosSecFiltrados.filter((modSec: any) => {
+            const permiso = permisosMap.get(modSec.Id);
+            return permiso && permiso.PermisoVer === 1;
+          });
+        }
+        
+        setModulosSecundarios(modulosSecFiltrados);
       }
 
       // Cargar datos del registro principal
@@ -663,6 +683,22 @@ export default function DetalleRegistroPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg text-red-500 dark:text-red-400">Registro no encontrado</div>
+      </div>
+    );
+  }
+
+  // Validar permiso de Ver
+  if (!permisosModuloPrincipal.ver && !permisosModuloPrincipal.isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="text-lg text-red-500 dark:text-red-400 mb-2">Acceso Denegado</div>
+        <div className="text-sm text-gray-600 dark:text-gray-400">No tienes permisos para ver este módulo</div>
+        <Button
+          className="mt-4"
+          onClick={() => router.push("/dashboard")}
+        >
+          Volver al Inicio
+        </Button>
       </div>
     );
   }

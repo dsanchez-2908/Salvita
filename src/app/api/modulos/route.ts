@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute, sql } from '@/lib/db';
-import { getUserFromRequest } from '@/lib/auth';
+import { getUserFromRequest, registrarTraza } from '@/lib/auth';
 import { sanitizeTableName, sanitizeColumnName } from '@/lib/utils';
 import { ApiResponse, CreateModuloRequest } from '@/types';
 
@@ -145,8 +145,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generar nombre de tabla
-    const nombreTabla = `TD_MODULO_${sanitizeTableName(Nombre)}`;
+    // Generar nombre de tabla con prefijo según tipo
+    let prefijo = '';
+    switch (Tipo) {
+      case 'Principal':
+        prefijo = 'TD_MODULO_I_';
+        break;
+      case 'Secundario':
+        prefijo = 'TD_MODULO_II_';
+        break;
+      case 'Independiente':
+        prefijo = 'TD_MODULO_';
+        break;
+      default:
+        prefijo = 'TD_MODULO_';
+    }
+    const nombreTabla = `${prefijo}${sanitizeTableName(Nombre)}`;
 
     // Insertar módulo
     const result = await execute(
@@ -260,6 +274,14 @@ export async function POST(request: NextRequest) {
     // Ejecutar creación de tabla
     await execute(createTableQuery);
 
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Agregar',
+      'Módulos',
+      `Módulo creado: ${Nombre}. Tipo: ${Tipo}`
+    );
+
     return NextResponse.json<ApiResponse>({
       success: true,
       data: { Id: nuevoModuloId },
@@ -296,7 +318,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body: CreateModuloRequest = await request.json();
-    const { Nombre, Tipo, ModuloPadreId, Icono, Orden, Campos } = body;
+    const { Nombre, Tipo, ModuloPrincipalId, Icono, Orden, Campos } = body;
 
     // Validar campos requeridos
     if (!Nombre || !Tipo || !Campos || Campos.length === 0) {
@@ -305,6 +327,9 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Construir lista de cambios para traza
+    const cambios: string[] = [];
 
     // Obtener módulo actual para obtener NombreTabla
     const moduloActual = await query<any>(
@@ -320,7 +345,33 @@ export async function PUT(request: NextRequest) {
     }
 
     const nombreTablaActual = moduloActual[0].NombreTabla;
-    const nombreTabla = `TD_MODULO_${Nombre.toUpperCase().replace(/ /g, '_')}`;
+    const nombreModuloActual = moduloActual[0].Nombre;
+    
+    // Solo generar nuevo nombre de tabla si cambió el nombre del módulo
+    let nombreTabla = nombreTablaActual;
+    if (nombreModuloActual !== Nombre) {
+      let prefijo = '';
+      switch (Tipo) {
+        case 'Principal':
+          prefijo = 'TD_MODULO_I_';
+          break;
+        case 'Secundario':
+          prefijo = 'TD_MODULO_II_';
+          break;
+        case 'Independiente':
+          prefijo = 'TD_MODULO_';
+          break;
+        default:
+          prefijo = 'TD_MODULO_';
+      }
+      nombreTabla = `${prefijo}${sanitizeTableName(Nombre)}`;
+    }
+
+    if (nombreModuloActual !== Nombre) cambios.push(`Nombre: ${Nombre}`);
+    if (Tipo) cambios.push(`Tipo: ${Tipo}`);
+    if (Icono) cambios.push('Icono');
+    if (Orden) cambios.push('Orden');
+    if (Campos) cambios.push(`Campos: ${Campos.length}`);
 
     // Obtener campos actuales
     const camposActuales = await query<any>(
@@ -388,7 +439,9 @@ export async function PUT(request: NextRequest) {
 
     // Si cambió el nombre del módulo, renombrar tabla
     if (nombreTabla !== nombreTablaActual) {
-      await execute(`EXEC sp_rename '${nombreTablaActual}', '${nombreTabla.replace('TD_MODULO_', '')}'`);
+      // Usar la sintaxis correcta de sp_rename: sp_rename 'old_name', 'new_name'
+      const nuevoNombreTabla = nombreTabla.replace('TD_MODULO_', '');
+      await execute(`EXEC sp_rename '[${nombreTablaActual}]', '${nuevoNombreTabla}'`);
     }
 
     // Actualizar registro del módulo
@@ -405,7 +458,7 @@ export async function PUT(request: NextRequest) {
         id: parseInt(id),
         nombre: Nombre,
         tipo: Tipo,
-        moduloPrincipalId: ModuloPadreId || null,
+        moduloPrincipalId: ModuloPrincipalId || null,
         icono: Icono || 'FileText',
         orden: Orden || 1,
         nombreTabla: nombreTabla
@@ -441,7 +494,13 @@ export async function PUT(request: NextRequest) {
         }
       );
     }
-
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Modificar',
+      'Módulos',
+      `Módulo modificado (ID: ${id}). Cambios: ${cambios.join(', ')}`
+    );
     return NextResponse.json<ApiResponse>({
       success: true,
       data: { Id: parseInt(id) },
@@ -479,7 +538,7 @@ export async function DELETE(request: NextRequest) {
 
     // Obtener módulo
     const modulo = await query<any>(
-      'SELECT NombreTabla FROM TD_MODULOS WHERE Id = @id',
+      'SELECT Nombre, NombreTabla FROM TD_MODULOS WHERE Id = @id',
       { id: parseInt(id) }
     );
 
@@ -490,6 +549,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    const nombreModulo = modulo[0].Nombre;
     const nombreTabla = modulo[0].NombreTabla;
 
     // Verificar si la tabla tiene registros
@@ -524,6 +584,14 @@ export async function DELETE(request: NextRequest) {
     await execute('DELETE FROM TD_MODULOS WHERE Id = @id', {
       id: parseInt(id),
     });
+
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Eliminar',
+      'Módulos',
+      `Módulo eliminado: ${nombreModulo}`
+    );
 
     return NextResponse.json<ApiResponse>({
       success: true,

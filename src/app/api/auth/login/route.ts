@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
         m.Id as ModuloId,
         m.Nombre as ModuloNombre,
         MAX(CAST(rp.PermisoVer as int)) as PermisoVer,
+        MAX(CAST(rp.PermisoVerAgrupado as int)) as PermisoVerAgrupado,
         MAX(CAST(rp.PermisoAgregar as int)) as PermisoAgregar,
         MAX(CAST(rp.PermisoModificar as int)) as PermisoModificar,
         MAX(CAST(rp.PermisoEliminar as int)) as PermisoEliminar

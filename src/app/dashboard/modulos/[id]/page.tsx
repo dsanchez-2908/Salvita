@@ -742,6 +742,22 @@ export default function ModuloDinamicoPage() {
     );
   }
 
+  // Validar permiso de Ver
+  if (!permisos.ver && !permisos.isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="text-lg text-red-500 dark:text-red-400 mb-2">Acceso Denegado</div>
+        <div className="text-sm text-gray-600 dark:text-gray-400">No tienes permisos para ver este módulo</div>
+        <Button
+          className="mt-4"
+          onClick={() => router.push("/dashboard")}
+        >
+          Volver al Inicio
+        </Button>
+      </div>
+    );
+  }
+
   const camposVisiblesGrilla = campos.filter((c) => c.VisibleEnGrilla);
 
   // Calcular paginación

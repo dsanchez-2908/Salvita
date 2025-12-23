@@ -382,19 +382,19 @@ export default function RolesPage() {
 
                 <div className="space-y-2">
                   <Label>Permisos por Módulo</Label>
-                  <div className="border rounded-md p-4 max-h-[400px] overflow-y-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-1/4">Módulo</TableHead>
-                          <TableHead className="text-center w-[12%]">Ver</TableHead>
-                          <TableHead className="text-center w-[12%]">Ver Agrupado</TableHead>
-                          <TableHead className="text-center w-[12%]">Agregar</TableHead>
-                          <TableHead className="text-center w-[12%]">Modificar</TableHead>
-                          <TableHead className="text-center w-[12%]">Eliminar</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                  <div className="border rounded-md max-h-[400px] overflow-y-auto relative bg-background">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b">
+                        <tr>
+                          <th className="w-1/4 bg-white dark:bg-gray-950 text-left p-3 font-medium">Módulo</th>
+                          <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Ver</th>
+                          <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Ver Agrupado</th>
+                          <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Agregar</th>
+                          <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Modificar</th>
+                          <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Eliminar</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                         {/* Primero módulos principales */}
                         {formData.Permisos
                           .filter((permiso) => {
@@ -410,16 +410,16 @@ export default function RolesPage() {
                             const modulo = getModuloInfo(permiso.ModuloId);
                             return (
                               <>
-                                <TableRow key={permiso.ModuloId} className="bg-blue-50 dark:bg-blue-900/20 font-medium">
-                                  <TableCell>
+                                <tr key={permiso.ModuloId} className="bg-blue-50 dark:bg-blue-900/20 font-medium border-b">
+                                  <td className="p-3">
                                     <div className="flex items-center gap-2">
                                       <span className="px-2 py-0.5 text-xs rounded bg-blue-600 text-white font-semibold">
                                         Principal
                                       </span>
                                       <span className="font-semibold">{permiso.ModuloNombre}</span>
                                     </div>
-                                  </TableCell>
-                                  <TableCell className="text-center">
+                                  </td>
+                                  <td className="text-center p-3">
                                     <input
                                       type="checkbox"
                                       checked={permiso.PermisoVer}
@@ -432,8 +432,8 @@ export default function RolesPage() {
                                       }
                                       className="w-4 h-4"
                                     />
-                                  </TableCell>
-                                  <TableCell className="text-center">
+                                  </td>
+                                  <td className="text-center p-3">
                                     <input
                                       type="checkbox"
                                       checked={permiso.PermisoVerAgrupado}
@@ -446,8 +446,8 @@ export default function RolesPage() {
                                       }
                                       className="w-4 h-4"
                                     />
-                                  </TableCell>
-                                  <TableCell className="text-center">
+                                  </td>
+                                  <td className="text-center p-3">
                                     <input
                                       type="checkbox"
                                       checked={permiso.PermisoAgregar}
@@ -460,8 +460,8 @@ export default function RolesPage() {
                                       }
                                       className="w-4 h-4"
                                     />
-                                  </TableCell>
-                                  <TableCell className="text-center">
+                                  </td>
+                                  <td className="text-center p-3">
                                     <input
                                       type="checkbox"
                                       checked={permiso.PermisoModificar}
@@ -474,8 +474,8 @@ export default function RolesPage() {
                                       }
                                       className="w-4 h-4"
                                     />
-                                  </TableCell>
-                                  <TableCell className="text-center">
+                                  </td>
+                                  <td className="text-center p-3">
                                     <input
                                       type="checkbox"
                                       checked={permiso.PermisoEliminar}
@@ -488,8 +488,8 @@ export default function RolesPage() {
                                       }
                                       className="w-4 h-4"
                                     />
-                                  </TableCell>
-                                </TableRow>
+                                  </td>
+                                </tr>
                                 
                                 {/* Módulos secundarios de este principal */}
                                 {formData.Permisos
@@ -503,8 +503,8 @@ export default function RolesPage() {
                                     return (moduloA?.Orden || 0) - (moduloB?.Orden || 0);
                                   })
                                   .map((permisoSec) => (
-                                    <TableRow key={permisoSec.ModuloId} className="bg-gray-50 dark:bg-gray-800/50">
-                                      <TableCell>
+                                    <tr key={permisoSec.ModuloId} className="bg-gray-50 dark:bg-gray-800/50 border-b">
+                                      <td className="p-3">
                                         <div className="flex items-center gap-2 pl-8">
                                           <span className="text-gray-400">└─</span>
                                           <span className="px-2 py-0.5 text-xs rounded bg-gray-500 text-white">
@@ -512,8 +512,8 @@ export default function RolesPage() {
                                           </span>
                                           <span>{permisoSec.ModuloNombre}</span>
                                         </div>
-                                      </TableCell>
-                                      <TableCell className="text-center">
+                                      </td>
+                                      <td className="text-center p-3">
                                         <input
                                           type="checkbox"
                                           checked={permisoSec.PermisoVer}
@@ -526,11 +526,11 @@ export default function RolesPage() {
                                           }
                                           className="w-4 h-4"
                                         />
-                                      </TableCell>
-                                      <TableCell className="text-center bg-gray-100 dark:bg-gray-900">
+                                      </td>
+                                      <td className="text-center bg-gray-100 dark:bg-gray-900 p-3">
                                         {/* Ver Agrupado no aplica a secundarios */}
-                                      </TableCell>
-                                      <TableCell className="text-center">
+                                      </td>
+                                      <td className="text-center p-3">
                                         <input
                                           type="checkbox"
                                           checked={permisoSec.PermisoAgregar}
@@ -543,8 +543,8 @@ export default function RolesPage() {
                                           }
                                           className="w-4 h-4"
                                         />
-                                      </TableCell>
-                                      <TableCell className="text-center">
+                                      </td>
+                                      <td className="text-center p-3">
                                         <input
                                           type="checkbox"
                                           checked={permisoSec.PermisoModificar}
@@ -557,8 +557,8 @@ export default function RolesPage() {
                                           }
                                           className="w-4 h-4"
                                         />
-                                      </TableCell>
-                                      <TableCell className="text-center">
+                                      </td>
+                                      <td className="text-center p-3">
                                         <input
                                           type="checkbox"
                                           checked={permisoSec.PermisoEliminar}
@@ -571,8 +571,8 @@ export default function RolesPage() {
                                           }
                                           className="w-4 h-4"
                                         />
-                                      </TableCell>
-                                    </TableRow>
+                                      </td>
+                                    </tr>
                                   ))}
                               </>
                             );
@@ -590,8 +590,8 @@ export default function RolesPage() {
                             return (moduloA?.Orden || 0) - (moduloB?.Orden || 0);
                           })
                           .map((permiso) => (
-                            <TableRow key={permiso.ModuloId} className="bg-yellow-50 dark:bg-yellow-900/20">
-                              <TableCell>
+                            <tr key={permiso.ModuloId} className="bg-yellow-50 dark:bg-yellow-900/20 border-b">
+                              <td className="p-3">
                                 <div className="flex items-center gap-2">
                                   <span className="px-2 py-0.5 text-xs rounded bg-yellow-600 text-white">
                                     Secundario
@@ -601,8 +601,8 @@ export default function RolesPage() {
                                     (sin padre asignado)
                                   </span>
                                 </div>
-                              </TableCell>
-                              <TableCell className="text-center">
+                              </td>
+                              <td className="text-center p-3">
                                 <input
                                   type="checkbox"
                                   checked={permiso.PermisoVer}
@@ -615,11 +615,11 @@ export default function RolesPage() {
                                   }
                                   className="w-4 h-4"
                                 />
-                              </TableCell>
-                              <TableCell className="text-center bg-gray-100 dark:bg-gray-900">
+                              </td>
+                              <td className="text-center bg-gray-100 dark:bg-gray-900 p-3">
                                 {/* Ver Agrupado no aplica a secundarios */}
-                              </TableCell>
-                              <TableCell className="text-center">
+                              </td>
+                              <td className="text-center p-3">
                                 <input
                                   type="checkbox"
                                   checked={permiso.PermisoAgregar}
@@ -632,8 +632,8 @@ export default function RolesPage() {
                                   }
                                   className="w-4 h-4"
                                 />
-                              </TableCell>
-                              <TableCell className="text-center">
+                              </td>
+                              <td className="text-center p-3">
                                 <input
                                   type="checkbox"
                                   checked={permiso.PermisoModificar}
@@ -646,8 +646,8 @@ export default function RolesPage() {
                                   }
                                   className="w-4 h-4"
                                 />
-                              </TableCell>
-                              <TableCell className="text-center">
+                              </td>
+                              <td className="text-center p-3">
                                 <input
                                   type="checkbox"
                                   checked={permiso.PermisoEliminar}
@@ -660,11 +660,11 @@ export default function RolesPage() {
                                   }
                                   className="w-4 h-4"
                                 />
-                              </TableCell>
-                            </TableRow>
+                              </td>
+                            </tr>
                           ))}
-                      </TableBody>
-                    </Table>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
