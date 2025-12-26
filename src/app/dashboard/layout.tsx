@@ -43,6 +43,7 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [configOpen, setConfigOpen] = useState(false);
   const [consultasOpen, setConsultasOpen] = useState(false);
+  const [tieneAccesoTrazas, setTieneAccesoTrazas] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
@@ -59,6 +60,7 @@ export default function DashboardLayout({
     setUser(JSON.parse(userData));
     loadProjectInfo();
     loadModulos(token);
+    verificarAccesoTrazas(token);
   }, [router]);
 
   const loadProjectInfo = async () => {
@@ -122,6 +124,23 @@ export default function DashboardLayout({
       }
     } catch (error) {
       console.error("Error cargando módulos:", error);
+    }
+  };
+
+  const verificarAccesoTrazas = async (token: string) => {
+    try {
+      const response = await fetch("/api/trazas", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (response.ok) {
+        setTieneAccesoTrazas(true);
+      } else {
+        setTieneAccesoTrazas(false);
+      }
+    } catch (error) {
+      console.error("Error verificando acceso a trazas:", error);
+      setTieneAccesoTrazas(false);
     }
   };
 
@@ -253,13 +272,23 @@ export default function DashboardLayout({
                         Parámetros
                       </Button>
                     </Link>
+                    <Link href="/dashboard/dashboard-config">
+                      <Button
+                        variant={pathname === "/dashboard/dashboard-config" ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        size="sm"
+                      >
+                        <Home className="mr-2 h-4 w-4" />
+                        Dashboard
+                      </Button>
+                    </Link>
                   </div>
                 )}
               </div>
             )}
 
             {/* Menú de Consultas - Visible según permisos */}
-            {(isAdmin || modulos.some(m => m.Nombre === 'Trazas')) && (
+            {tieneAccesoTrazas && (
               <div>
                 <Button
                   variant="ghost"

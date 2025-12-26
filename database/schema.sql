@@ -53,6 +53,7 @@ BEGIN
         [Nombre] VARCHAR(100) NOT NULL UNIQUE,
         [Descripcion] VARCHAR(500),
         [Estado] VARCHAR(20) DEFAULT 'Activo' CHECK ([Estado] IN ('Activo', 'Inactivo')),
+        [AccesoTrazas] BIT NOT NULL DEFAULT 0,
         [FechaCreacion] DATETIME DEFAULT GETDATE(),
         [FechaModificacion] DATETIME DEFAULT GETDATE(),
         [UsuarioCreacion] VARCHAR(100),
@@ -60,8 +61,8 @@ BEGIN
     );
 
     -- Insertar rol Administrador por defecto
-    INSERT INTO [dbo].[TD_ROLES] ([Nombre], [Descripcion], [UsuarioCreacion]) 
-    VALUES ('Administrador', 'Acceso completo al sistema', 'system');
+    INSERT INTO [dbo].[TD_ROLES] ([Nombre], [Descripcion], [AccesoTrazas], [UsuarioCreacion]) 
+    VALUES ('Administrador', 'Acceso completo al sistema', 1, 'system');
 END
 GO
 

@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: CreateRolRequest = await request.json();
-    const { Nombre, Descripcion, Permisos } = body;
+    const { Nombre, Descripcion, Permisos, AccesoTrazas } = body;
 
     if (!Nombre) {
       return NextResponse.json<ApiResponse>(
@@ -100,12 +100,13 @@ export async function POST(request: NextRequest) {
 
     // Insertar rol
     const result = await execute(
-      `INSERT INTO TD_ROLES (Nombre, Descripcion, UsuarioCreacion)
+      `INSERT INTO TD_ROLES (Nombre, Descripcion, AccesoTrazas, UsuarioCreacion)
        OUTPUT INSERTED.Id
-       VALUES (@nombre, @descripcion, @usuarioCreacion)`,
+       VALUES (@nombre, @descripcion, @accesoTrazas, @usuarioCreacion)`,
       {
         nombre: Nombre,
         descripcion: Descripcion || null,
+        accesoTrazas: AccesoTrazas ? 1 : 0,
         usuarioCreacion: user.usuario,
       }
     );
@@ -177,7 +178,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body: any = await request.json();
-    const { Nombre, Descripcion, Estado, Permisos } = body;
+    const { Nombre, Descripcion, Estado, Permisos, AccesoTrazas } = body;
 
     // Construir lista de cambios para traza
     const cambios: string[] = [];
@@ -185,6 +186,7 @@ export async function PUT(request: NextRequest) {
     if (Descripcion !== undefined) cambios.push('Descripción');
     if (Estado) cambios.push(`Estado: ${Estado}`);
     if (Permisos) cambios.push('Permisos');
+    if (AccesoTrazas !== undefined) cambios.push(`AccesoTrazas: ${AccesoTrazas ? 'Sí' : 'No'}`);
 
     // Actualizar rol
     let updateQuery = 'UPDATE TD_ROLES SET FechaModificacion = GETDATE(), UsuarioModificacion = @usuarioModificacion';
@@ -204,6 +206,10 @@ export async function PUT(request: NextRequest) {
     if (Estado) {
       updateQuery += ', Estado = @estado';
       params.estado = Estado;
+    }
+    if (AccesoTrazas !== undefined) {
+      updateQuery += ', AccesoTrazas = @accesoTrazas';
+      params.accesoTrazas = AccesoTrazas ? 1 : 0;
     }
 
     updateQuery += ' WHERE Id = @id';

@@ -22,6 +22,7 @@ export default function RolesPage() {
     Nombre: "",
     Descripcion: "",
     Estado: "Activo",
+    AccesoTrazas: false,
     Permisos: [] as any[],
   });
   const { toast } = useToast();
@@ -142,6 +143,7 @@ export default function RolesPage() {
             ModuloId: m.Id,
             ModuloNombre: m.Nombre,
             PermisoVer: permiso?.PermisoVer || false,
+            PermisoVerAgrupado: permiso?.PermisoVerAgrupado || false,
             PermisoAgregar: permiso?.PermisoAgregar || false,
             PermisoModificar: permiso?.PermisoModificar || false,
             PermisoEliminar: permiso?.PermisoEliminar || false,
@@ -152,6 +154,7 @@ export default function RolesPage() {
           Nombre: data.data.Nombre,
           Descripcion: data.data.Descripcion || "",
           Estado: data.data.Estado,
+          AccesoTrazas: data.data.AccesoTrazas || false,
           Permisos: permisos,
         });
         setShowModal(true);
@@ -211,10 +214,12 @@ export default function RolesPage() {
       Nombre: "",
       Descripcion: "",
       Estado: "Activo",
+      AccesoTrazas: false,
       Permisos: modulos.map((m) => ({
         ModuloId: m.Id,
         ModuloNombre: m.Nombre,
         PermisoVer: true,
+        PermisoVerAgrupado: false,
         PermisoAgregar: false,
         PermisoModificar: false,
         PermisoEliminar: false,
@@ -378,6 +383,23 @@ export default function RolesPage() {
                       setFormData({ ...formData, Descripcion: e.target.value })
                     }
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.AccesoTrazas}
+                      onChange={(e) =>
+                        setFormData({ ...formData, AccesoTrazas: e.target.checked })
+                      }
+                      className="w-4 h-4"
+                    />
+                    <span>Acceso a Consultas / Auditoría</span>
+                  </Label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">
+                    Permite al rol acceder a la pantalla de consultas y auditoría de trazas del sistema
+                  </p>
                 </div>
 
                 <div className="space-y-2">

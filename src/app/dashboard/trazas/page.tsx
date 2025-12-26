@@ -41,6 +41,7 @@ export default function TrazasPage() {
   const [busquedaRealizada, setBusquedaRealizada] = useState(false);
   const [sortField, setSortField] = useState<SortField>("FechaHora");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [tieneAcceso, setTieneAcceso] = useState<boolean | null>(null);
 
   // Filtros
   const [tipoProceso, setTipoProceso] = useState("");
@@ -52,9 +53,31 @@ export default function TrazasPage() {
   const [detalle, setDetalle] = useState("");
 
   useEffect(() => {
+    verificarAcceso();
     loadUsuarios();
     loadModulos();
   }, []);
+
+  const verificarAcceso = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      // Hacer una consulta simple para verificar acceso
+      const response = await fetch("/api/trazas", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (response.status === 403) {
+        setTieneAcceso(false);
+      } else if (response.ok) {
+        setTieneAcceso(true);
+      } else {
+        setTieneAcceso(false);
+      }
+    } catch (error) {
+      console.error("Error al verificar acceso:", error);
+      setTieneAcceso(false);
+    }
+  };
 
   const loadUsuarios = async () => {
     try {
@@ -236,8 +259,35 @@ export default function TrazasPage() {
         <h1 className="text-3xl font-bold">Auditoría del Sistema</h1>
       </div>
 
-      {/* Filtros */}
-      <Card>
+      {tieneAcceso === false ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold text-red-600 dark:text-red-400 mb-2">
+                Acceso Denegado
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400">
+                No tiene permisos para acceder a la pantalla de Consultas / Auditoría.
+              </p>
+              <p className="text-gray-500 dark:text-gray-500 text-sm mt-2">
+                Contacte al administrador si necesita acceso a esta funcionalidad.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : tieneAcceso === null ? (
+        <Card>
+          <CardContent className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p>Verificando permisos...</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Filtros */}
+          <Card>
         <CardHeader>
           <CardTitle>Filtros de Búsqueda</CardTitle>
         </CardHeader>
@@ -472,6 +522,8 @@ export default function TrazasPage() {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
     </div>
   );
 }

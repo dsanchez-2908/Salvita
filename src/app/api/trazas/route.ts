@@ -14,27 +14,25 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Obtener el ID del módulo de Trazas
+    // Verificar si el usuario tiene acceso a trazas a través de sus roles
     const pool = await getConnection();
-    const trazasModulo = await pool
+    const accesoCheck = await pool
       .request()
-      .query("SELECT Id FROM TD_MODULOS WHERE Nombre = 'Trazas' AND Tipo = 'Independiente'");
+      .input("userId", sql.Int, user.userId)
+      .query(`
+        SELECT COUNT(*) as TieneAcceso
+        FROM TD_USUARIOS u
+        INNER JOIN TR_USUARIO_ROL ur ON u.Id = ur.UsuarioId
+        INNER JOIN TD_ROLES r ON ur.RolId = r.Id
+        WHERE u.Id = @userId 
+          AND u.Estado = 'Activo' 
+          AND r.Estado = 'Activo'
+          AND (r.Nombre = 'Administrador' OR r.AccesoTrazas = 1)
+      `);
 
-    if (trazasModulo.recordset.length === 0) {
+    if (accesoCheck.recordset[0].TieneAcceso === 0) {
       return NextResponse.json(
-        { success: false, message: "Módulo de Trazas no configurado" },
-        { status: 500 }
-      );
-    }
-
-    const trazasModuloId = trazasModulo.recordset[0].Id;
-
-    // Verificar si el usuario tiene permiso de Ver en el módulo de Trazas
-    const tienePermiso = await verificarPermiso(user.userId, trazasModuloId, 'ver');
-    
-    if (!tienePermiso) {
-      return NextResponse.json(
-        { success: false, message: "No tiene permisos para ver las trazas de auditoría" },
+        { success: false, message: "No tiene permisos para acceder a las trazas de auditoría" },
         { status: 403 }
       );
     }

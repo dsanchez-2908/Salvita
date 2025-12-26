@@ -133,6 +133,45 @@ export default function VistaAgrupadaPage() {
         return valor.toLocaleString("es-AR");
       case "Booleano":
         return valor ? "Sí" : "No";
+      case "Archivo":
+        if (valor) {
+          return (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async (e) => {
+                e.stopPropagation(); // Evitar que se dispare el click del card
+                try {
+                  const token = localStorage.getItem("token");
+                  const response = await fetch(`/api/documentos/viewer?documentId=${valor}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  const data = await response.json();
+                  if (data.success) {
+                    window.open(data.viewerUrl, '_blank');
+                  } else {
+                    toast({
+                      title: "Error",
+                      description: "No se pudo abrir el archivo",
+                      variant: "destructive",
+                    });
+                  }
+                } catch (error) {
+                  console.error("Error:", error);
+                  toast({
+                    title: "Error",
+                    description: "Error al abrir el archivo",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              Ver
+            </Button>
+          );
+        }
+        return "-";
       default:
         return valor.toString();
     }
@@ -247,11 +286,11 @@ export default function VistaAgrupadaPage() {
                     .map((campo: any) => (
                       <div key={campo.Nombre} className="space-y-1">
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {campo.Etiqueta || campo.Nombre}
+                          {campo.Nombre}
                         </p>
-                        <p className="text-sm font-medium">
+                        <div className="text-sm font-medium">
                           {renderCampoValor(campo, registro[campo.Nombre])}
-                        </p>
+                        </div>
                       </div>
                     ))}
                 </div>
