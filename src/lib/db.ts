@@ -1,9 +1,9 @@
 import sql from 'mssql';
 
 const config: sql.config = {
-  server: 'localhost',
+  server: '172.16.16.60',
   port: 1433,
-  database: process.env.DB_NAME || 'Salvita',
+  database: process.env.DB_NAME || 'salvita',
   options: {
     encrypt: false,
     trustServerCertificate: true,
@@ -13,7 +13,7 @@ const config: sql.config = {
     type: 'default',
     options: {
       userName: process.env.DB_USER || 'sa',
-      password: process.env.DB_PASSWORD || ''
+      password: process.env.DB_PASSWORD || 'Lpa1234$'
     }
   },
   pool: {
