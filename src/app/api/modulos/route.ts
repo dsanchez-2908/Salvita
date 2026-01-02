@@ -417,10 +417,20 @@ export async function PUT(request: NextRequest) {
       const nullable = campoNuevo.Obligatorio ? 'NOT NULL' : 'NULL';
 
       if (!camposActualesMap.has(campoNuevo.Nombre)) {
-        // Nueva columna - siempre NULL al agregar para no romper datos existentes
-        alterStatements.push(
-          `ALTER TABLE [${nombreTablaActual}] ADD [${nombreColumna}] ${tipoDato} NULL`
+        // Nueva columna - verificar primero si ya existe en la tabla
+        const columnaExiste = await query(
+          `SELECT COUNT(*) as existe
+           FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_NAME = @tableName AND COLUMN_NAME = @columnName`,
+          { tableName: nombreTablaActual, columnName: nombreColumna }
         );
+
+        if (columnaExiste[0].existe === 0) {
+          // Nueva columna - siempre NULL al agregar para no romper datos existentes
+          alterStatements.push(
+            `ALTER TABLE [${nombreTablaActual}] ADD [${nombreColumna}] ${tipoDato} NULL`
+          );
+        }
       } else {
         // Campo existente - actualizar propiedades de largo si cambió
         const campoActual = camposActualesMap.get(campoNuevo.Nombre);

@@ -89,3 +89,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Estilos específicos para el chatbot de n8n */
+.chatbot-container * {
+  box-sizing: border-box !important;
+}
+
+.chatbot-container input[type="text"],
+.chatbot-container textarea {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 100% !important;
+}

@@ -1,0 +1,38 @@
+/* Estilos para el chatbot de n8n */
+#n8n-chat * {
+  box-sizing: border-box !important;
+}
+
+#n8n-chat,
+[class*="n8n-chat"],
+[id*="n8n-chat"] {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Input del chat */
+#n8n-chat input[type="text"],
+#n8n-chat textarea,
+[class*="n8n-chat"] input[type="text"],
+[class*="n8n-chat"] textarea,
+[class*="input"] input,
+[class*="input"] textarea {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Contenedores */
+[class*="chat-input"],
+[class*="input-container"],
+[class*="message-input"] {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Forzar ancho completo en todos los inputs dentro del contenedor del chatbot */
+.chatbot-container input,
+.chatbot-container textarea {
+  width: 100% !important;
+  min-width: 100% !important;
+}
