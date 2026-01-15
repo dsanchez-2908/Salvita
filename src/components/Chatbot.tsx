@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from 'react';
+import '@n8n/chat/style.css';
 
 interface ChatbotProps {
   webhookUrl: string;
@@ -17,15 +18,16 @@ export default function Chatbot({ webhookUrl }: ChatbotProps) {
       const { createChat } = await import('@n8n/chat');
       
       createChat({
-        mode: 'fullscreen',
         webhookUrl: webhookUrl,
+        mode: 'fullscreen',
         target: chatRef.current!,
+        showWelcomeScreen: false,
+        loadPreviousSession: true,
         initialMessages: [
-          'Hola! 👋',
-          'Soy el asistente virtual de Salvita. ¿En qué puedo ayudarte?',
+          'Hola, soy el Asistente Virtual de Salvita. ¿En qué puedo ayudarte?',
         ],
         i18n: {
-          es: {
+          en: {
             title: 'Asistente Salvita',
             subtitle: 'Pregunta lo que necesites',
             footer: '',
@@ -33,7 +35,7 @@ export default function Chatbot({ webhookUrl }: ChatbotProps) {
             inputPlaceholder: 'Escribe tu mensaje...',
           },
         },
-        defaultLanguage: 'es',
+        defaultLanguage: 'en',
       });
     };
 
@@ -45,8 +47,8 @@ export default function Chatbot({ webhookUrl }: ChatbotProps) {
   return (
     <div 
       ref={chatRef}
-      className="w-full h-full chatbot-container"
-      style={{ minHeight: '100%', width: '100%' }}
+      className="w-full h-full"
+      style={{ width: '100%', height: '100%' }}
     />
   );
 }
