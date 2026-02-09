@@ -4,17 +4,12 @@ const config: sql.config = {
   server: '172.16.16.60',
   port: 1433,
   database: process.env.DB_NAME || 'salvita',
+  user: process.env.DB_USER || 'sa',
+  password: process.env.DB_PASSWORD || 'Lpa1234$',
   options: {
     encrypt: false,
     trustServerCertificate: true,
     enableArithAbort: true
-  },
-  authentication: {
-    type: 'default',
-    options: {
-      userName: process.env.DB_USER || 'sa',
-      password: process.env.DB_PASSWORD || 'Lpa1234$'
-    }
   },
   pool: {
     max: 10,

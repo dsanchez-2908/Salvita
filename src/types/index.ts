@@ -54,6 +54,34 @@ export interface Modulo {
   ModulosSecundarios?: Modulo[];
 }
 
+// Módulo V2 (con soporte para relaciones N:N)
+export interface ModuloV2 {
+  Id: number;
+  Nombre: string;
+  NombreTabla: string;
+  MostrarEnMenu: boolean;
+  Estado: EstadoGeneral;
+  Icono?: string;
+  Orden: number;
+  FechaCreacion: Date;
+  FechaModificacion?: Date;
+  UsuarioCreacion?: string;
+  UsuarioModificacion?: string;
+  Campos?: Campo[];
+  ModulosRelacionados?: ModuloRelacion[];
+}
+
+// Relación entre módulos
+export interface ModuloRelacion {
+  Id: number;
+  ModuloPadreId: number;
+  ModuloHijoId: number;
+  ModuloHijo?: ModuloV2;
+  Orden: number;
+  FechaCreacion: Date;
+  UsuarioCreacion?: string;
+}
+
 // Campo
 export interface Campo {
   Id: number;
@@ -172,6 +200,16 @@ export interface CreateModuloRequest {
   Icono?: string;
   Orden?: number;
   Campos: CreateCampoRequest[];
+}
+
+// Request para crear módulos V2
+export interface CreateModuloV2Request {
+  Nombre: string;
+  MostrarEnMenu: boolean;
+  Icono?: string;
+  Orden?: number;
+  Campos: CreateCampoRequest[];
+  ModulosRelacionados?: number[]; // IDs de módulos a relacionar
 }
 
 export interface CreateCampoRequest {

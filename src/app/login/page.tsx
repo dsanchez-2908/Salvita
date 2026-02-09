@@ -39,7 +39,7 @@ export default function LoginPage() {
       }
 
       // Cargar logo del sistema
-      const logoResponse = await fetch("/api/parametros?parametro=Logo%20Sistema");
+      const logoResponse = await fetch("/api/parametros?parametro=Logo");
       const logoData = await logoResponse.json();
       if (logoData.success && logoData.data && logoData.data.Valor) {
         setLogoUrl(logoData.data.Valor);

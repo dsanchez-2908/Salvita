@@ -68,6 +68,20 @@ export default function DashboardLayout({
     loadProjectInfo();
     loadModulos(token);
     verificarAccesoTrazas(token);
+
+    // Escuchar evento de actualización de módulos
+    const handleModulosUpdate = () => {
+      const token = localStorage.getItem("token");
+      if (token) {
+        loadModulos(token);
+      }
+    };
+
+    window.addEventListener('modulosUpdated', handleModulosUpdate);
+
+    return () => {
+      window.removeEventListener('modulosUpdated', handleModulosUpdate);
+    };
   }, [router]);
 
   const loadProjectInfo = async () => {
@@ -84,7 +98,7 @@ export default function DashboardLayout({
       }
 
       // Cargar logo del sistema
-      const logoResponse = await fetch("/api/parametros?parametro=Logo%20Sistema", {
+      const logoResponse = await fetch("/api/parametros?parametro=Logo", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const logoData = await logoResponse.json();
@@ -107,36 +121,18 @@ export default function DashboardLayout({
 
   const loadModulos = async (token: string) => {
     try {
-      const response = await fetch("/api/modulos", {
+      // Cargar solo módulos V2
+      const responseV2 = await fetch("/api/modulos-v2?soloMenu=true", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      const data = await response.json();
-      if (data.success) {
-        // Obtener permisos del usuario
-        const userData = localStorage.getItem("user");
-        const user = userData ? JSON.parse(userData) : null;
-        const isUserAdmin = user?.Roles?.includes("Administrador");
-        
-        // Filtrar solo módulos principales e independientes
-        let modulosPrincipales = data.data.filter(
-          (m: any) => m.Tipo === "Principal" || m.Tipo === "Independiente"
-        );
-        
-        // Si no es administrador, filtrar por permisos de Ver
-        if (!isUserAdmin && user?.Permisos) {
-          const permisosMap = new Map(
-            user.Permisos.map((p: any) => [p.ModuloId, p])
-          );
-          
-          modulosPrincipales = modulosPrincipales.filter((modulo: any) => {
-            const permiso = permisosMap.get(modulo.Id);
-            return permiso && permiso.PermisoVer === 1;
-          });
-        }
-        
-        setModulos(modulosPrincipales);
+      const dataV2 = await responseV2.json();
+      
+      if (dataV2.success) {
+        // Todos los módulos son V2, agregar flag para consistencia
+        const modulosV2Menu = dataV2.data.map((m: any) => ({ ...m, isV2: true }));
+        setModulos(modulosV2Menu);
       }
     } catch (error) {
       console.error("Error cargando módulos:", error);
@@ -268,9 +264,9 @@ export default function DashboardLayout({
                         Listas
                       </Button>
                     </Link>
-                    <Link href="/dashboard/modulos">
+                    <Link href="/dashboard/modulos-v2">
                       <Button
-                        variant={pathname === "/dashboard/modulos" ? "secondary" : "ghost"}
+                        variant={pathname === "/dashboard/modulos-v2" ? "secondary" : "ghost"}
                         className="w-full justify-start"
                         size="sm"
                       >
@@ -356,11 +352,16 @@ export default function DashboardLayout({
                     modulo.Icono === "File" ? File :
                     Folder; // Default
                   
+                  // Determinar la ruta según si es V2 o V1
+                  const moduloPath = modulo.isV2 
+                    ? `/dashboard/modulos-v2/${modulo.Id}` 
+                    : `/dashboard/modulos/${modulo.Id}`;
+                  
                   return (
-                    <Link key={modulo.Id} href={`/dashboard/modulos/${modulo.Id}`}>
+                    <Link key={modulo.Id} href={moduloPath}>
                       <Button
                         variant={
-                          pathname === `/dashboard/modulos/${modulo.Id}` ? "secondary" : "ghost"
+                          pathname === moduloPath ? "secondary" : "ghost"
                         }
                         className="w-full justify-start"
                       >

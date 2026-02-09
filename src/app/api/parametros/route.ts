@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const parametro = searchParams.get('parametro');
 
     // Parámetros públicos que no requieren autenticación (para el login)
-    const parametrosPublicos = ['Nombre Proyecto', 'Descripcion Login', 'Logo Sistema'];
+    const parametrosPublicos = ['Nombre Proyecto', 'Descripcion Login', 'Logo Sistema', 'Logo'];
 
     // Si se solicita un parámetro específico y es público, permitir sin autenticación
     const esParametroPublico = parametro && parametrosPublicos.includes(parametro);

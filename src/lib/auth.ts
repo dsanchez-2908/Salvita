@@ -65,12 +65,14 @@ export function getUserFromRequest(request: NextRequest): JWTPayload | null {
  * @param userId ID del usuario
  * @param moduloId ID del módulo
  * @param permiso Tipo de permiso a verificar: 'ver', 'verAgrupado', 'agregar', 'modificar', 'eliminar'
+ * @param moduloPadreId (Opcional) ID del módulo padre para verificar permisos contextuales. Si es módulo principal, usar null.
  * @returns true si tiene el permiso o es administrador, false en caso contrario
  */
 export async function verificarPermiso(
   userId: number,
   moduloId: number,
-  permiso: 'ver' | 'verAgrupado' | 'agregar' | 'modificar' | 'eliminar'
+  permiso: 'ver' | 'verAgrupado' | 'agregar' | 'modificar' | 'eliminar',
+  moduloPadreId?: number | null
 ): Promise<boolean> {
   try {
     // Verificar si es administrador
@@ -96,16 +98,19 @@ export async function verificarPermiso(
       eliminar: 'PermisoEliminar'
     }[permiso];
 
-    // Verificar permisos específicos
+    // Verificar permisos específicos considerando el contexto padre-hijo
     const permisos = await query(
       `SELECT MAX(CAST(rp.${columnaPermiso} as int)) as TienePermiso
        FROM TD_USUARIOS u
        INNER JOIN TR_USUARIO_ROL ur ON u.Id = ur.UsuarioId
        INNER JOIN TD_ROLES r ON ur.RolId = r.Id AND r.Estado = 'Activo'
        INNER JOIN TR_ROL_MODULO_PERMISO rp ON r.Id = rp.RolId
-       WHERE u.Id = @userId AND rp.ModuloId = @moduloId
+       WHERE u.Id = @userId 
+         AND rp.ModuloId = @moduloId
+         AND (rp.ModuloPadreId IS NULL AND @moduloPadreId IS NULL 
+              OR rp.ModuloPadreId = @moduloPadreId)
        GROUP BY rp.ModuloId`,
-      { userId, moduloId }
+      { userId, moduloId, moduloPadreId: moduloPadreId ?? null }
     );
 
     return permisos.length > 0 && permisos[0].TienePermiso === 1;
@@ -118,13 +123,13 @@ export async function verificarPermiso(
 /**
  * Registra una traza de auditoría
  * @param userId ID del usuario que realiza la acción
- * @param accion Tipo de acción: 'Agregar', 'Modificar', 'Eliminar'
+ * @param accion Tipo de acción: 'Agregar', 'Modificar', 'Eliminar', 'Consultar'
  * @param proceso Nombre del proceso/pantalla: 'Roles', 'Usuarios', 'Módulos', 'Lista: Nombre', 'Módulo: Nombre'
  * @param detalle Descripción detallada de lo que se hizo
  */
 export async function registrarTraza(
   userId: number,
-  accion: 'Agregar' | 'Modificar' | 'Eliminar',
+  accion: 'Agregar' | 'Modificar' | 'Eliminar' | 'Consultar',
   proceso: string,
   detalle: string
 ): Promise<void> {
@@ -142,8 +147,10 @@ export async function registrarTraza(
        VALUES (@userId, @usuario, @accion, @proceso, @detalle)`,
       { userId, usuario, accion, proceso, detalle }
     );
+
+    console.log(`✅ Traza registrada: ${accion} - ${proceso}`);
   } catch (error) {
-    console.error('Error registrando traza:', error);
+    console.error('❌ Error registrando traza:', error);
     // No lanzamos error para no interrumpir la operación principal
   }
 }

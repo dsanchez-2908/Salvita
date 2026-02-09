@@ -67,7 +67,7 @@ export default function ParametrosPage() {
     });
     
     // Si es el logo, mostrar preview
-    if (parametro.Parametro === "Logo Sistema" && parametro.Valor) {
+    if ((parametro.Parametro === "Logo Sistema" || parametro.Parametro === "Logo") && parametro.Valor) {
       setPreviewUrl(parametro.Valor);
     }
     
@@ -202,7 +202,7 @@ export default function ParametrosPage() {
     setPreviewUrl("");
   };
 
-  const esParametroLogo = formData.Parametro === "Logo Sistema";
+  const esParametroLogo = formData.Parametro === "Logo Sistema" || formData.Parametro === "Logo";
 
   if (loading) {
     return <div className="flex justify-center items-center h-64">Cargando...</div>;
@@ -227,7 +227,7 @@ export default function ParametrosPage() {
               >
                 <div className="flex-1">
                   <h3 className="font-semibold">{parametro.Parametro}</h3>
-                  {parametro.Parametro === "Logo Sistema" && parametro.Valor ? (
+                  {(parametro.Parametro === "Logo Sistema" || parametro.Parametro === "Logo") && parametro.Valor ? (
                     <div className="mt-2">
                       <img
                         src={parametro.Valor}

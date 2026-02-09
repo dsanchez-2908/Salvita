@@ -44,17 +44,92 @@ export async function GET(request: NextRequest) {
 
     // Obtener campos del módulo
     const campos = await query(
-      `SELECT Nombre, TipoDato, ListaId
+      `SELECT Nombre, NombreColumna, TipoDato, ListaId
        FROM TD_CAMPOS
        WHERE ModuloId = @moduloId AND (Visible = 1 OR VisibleEnGrilla = 1)
        ORDER BY Orden`,
       { moduloId: cfg.ModuloId }
     );
 
+    // Función helper para convertir valor de filtro si es una lista
+    const resolverValorFiltro = async (campoNombre: string, valorFiltro: string) => {
+      const campo = campos.find((c: any) => c.Nombre === campoNombre);
+      if (campo && campo.TipoDato === 'Lista' && campo.ListaId) {
+        // Buscar el ID del valor en la lista
+        const resultado = await query(
+          `SELECT Id FROM TD_VALORES_LISTA WHERE ListaId = @listaId AND Valor = @valor`,
+          { listaId: campo.ListaId, valor: valorFiltro }
+        );
+        if (resultado.length > 0) {
+          return resultado[0].Id.toString();
+        }
+        return null; // No se encontró el valor
+      }
+      return valorFiltro; // No es lista, retornar el valor tal cual
+    };
+
+    // Función helper para construir cláusula WHERE con operador
+    const construirFiltroWhere = async (campoFiltro: string, operador: string, valorFiltro: string) => {
+      const valorResuelto = await resolverValorFiltro(campoFiltro, valorFiltro);
+      
+      if (valorResuelto === null) {
+        return { clause: '', params: {} }; // Valor no encontrado, no aplicar filtro
+      }
+
+      const campo = campos.find((c: any) => c.Nombre === campoFiltro);
+      const nombreColumnaFisica = campo?.NombreColumna || campoFiltro;
+      const esNumero = campo && (campo.TipoDato === 'Numero' || campo.TipoDato === 'Lista') || !isNaN(Number(valorResuelto));
+      
+      let whereClause = '';
+      const params: any = {};
+
+      if (operador === 'LIKE') {
+        whereClause = `t.[${nombreColumnaFisica}] LIKE @valorFiltro`;
+        params.valorFiltro = `%${valorResuelto}%`;
+      } else {
+        whereClause = `t.[${nombreColumnaFisica}] ${operador} @valorFiltro`;
+        params.valorFiltro = esNumero ? parseInt(valorResuelto) : valorResuelto;
+      }
+
+      return { clause: whereClause, params };
+    };
+
     let data: any = {};
 
-    if (cfg.TipoVisualizacion === 'Agrupamiento') {
-      // Obtener datos agrupados
+    if (cfg.TipoVisualizacion === 'Totalizado') {
+      // Nuevo tipo: Mostrar total de registros con filtro opcional
+      const tableName = cfg.ModuloTabla;
+
+      if (!tableName) {
+        return NextResponse.json<ApiResponse>(
+          { success: false, error: 'Configuración inválida' },
+          { status: 400 }
+        );
+      }
+
+      let whereClause = "1=1";
+      let queryParams: any = {};
+
+      // Aplicar filtro si está activo
+      if (cfg.FiltroActivo && cfg.CampoFiltro && cfg.ValorFiltro) {
+        const filtro = await construirFiltroWhere(cfg.CampoFiltro, cfg.FiltroOperador || '=', cfg.ValorFiltro);
+        if (filtro.clause) {
+          whereClause += ` AND ${filtro.clause}`;
+          queryParams = { ...queryParams, ...filtro.params };
+        }
+      }
+
+      const resultado = await query(
+        `SELECT COUNT(*) as Total FROM ${tableName} t WHERE ${whereClause}`,
+        queryParams
+      );
+
+      data = { 
+        total: resultado[0]?.Total || 0,
+        filtroAplicado: cfg.FiltroActivo && cfg.CampoFiltro ? `${cfg.CampoFiltro} ${cfg.FiltroOperador || '='} ${cfg.ValorFiltro}` : null
+      };
+    } else if (cfg.TipoVisualizacion === 'Agrupamiento') {
+      // Obtener datos agrupados con filtro opcional
       const tableName = cfg.ModuloTabla;
       const campoAgrupamiento = cfg.CampoAgrupamiento;
 
@@ -65,8 +140,22 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      // Construir WHERE clause
+      let whereClause = "1=1";
+      let queryParams: any = {};
+
+      // Aplicar filtro opcional
+      if (cfg.FiltroActivo && cfg.CampoFiltro && cfg.ValorFiltro) {
+        const filtro = await construirFiltroWhere(cfg.CampoFiltro, cfg.FiltroOperador || '=', cfg.ValorFiltro);
+        if (filtro.clause) {
+          whereClause += ` AND ${filtro.clause}`;
+          queryParams = { ...queryParams, ...filtro.params };
+        }
+      }
+
       // Verificar si es un campo de lista
       const campo = campos.find((c: any) => c.Nombre === campoAgrupamiento);
+      const nombreColumnaFisica = campo?.NombreColumna || campoAgrupamiento;
       
       if (campo && campo.ListaId) {
         // Si es una lista, hacer JOIN con la tabla de valores
@@ -75,36 +164,49 @@ export async function GET(request: NextRequest) {
             lv.Valor as ${campoAgrupamiento},
             COUNT(*) as Total
            FROM ${tableName} t
-           LEFT JOIN TD_VALORES_LISTA lv ON t.${campoAgrupamiento} = lv.Id
-           WHERE t.Estado = 'Activo'
+           LEFT JOIN TD_VALORES_LISTA lv ON t.[${nombreColumnaFisica}] = lv.Id
+           WHERE ${whereClause}
            GROUP BY lv.Valor
-           ORDER BY Total DESC`
+           ORDER BY Total DESC`,
+          queryParams
         );
         data = { agrupados };
       } else {
         // Si no es una lista, agrupar directamente
         const agrupados = await query(
           `SELECT 
-            ${campoAgrupamiento},
+            [${nombreColumnaFisica}] as ${campoAgrupamiento},
             COUNT(*) as Total
-           FROM ${tableName}
-           WHERE Estado = 'Activo'
-           GROUP BY ${campoAgrupamiento}
-           ORDER BY Total DESC`
+           FROM ${tableName} t
+           WHERE ${whereClause}
+           GROUP BY [${nombreColumnaFisica}]
+           ORDER BY Total DESC`,
+          queryParams
         );
         data = { agrupados };
       }
     } else if (cfg.TipoVisualizacion === 'DetalleFiltrado') {
-      // Obtener datos filtrados
+      // Obtener datos filtrados con operador condicional y filtro opcional
       const tableName = cfg.ModuloTabla;
-      const campoFiltro = cfg.CampoFiltro;
-      const valorFiltro = cfg.ValorFiltro;
 
-      if (!tableName || !campoFiltro || !valorFiltro) {
+      if (!tableName) {
         return NextResponse.json<ApiResponse>(
-          { success: false, error: 'Configuración de filtro inválida' },
+          { success: false, error: 'Configuración inválida' },
           { status: 400 }
         );
+      }
+
+      // Construir WHERE clause
+      let whereClause = "1=1";
+      let queryParams: any = {};
+
+      // Aplicar filtro si está activo
+      if (cfg.FiltroActivo && cfg.CampoFiltro && cfg.ValorFiltro) {
+        const filtro = await construirFiltroWhere(cfg.CampoFiltro, cfg.FiltroOperador || '=', cfg.ValorFiltro);
+        if (filtro.clause) {
+          whereClause += ` AND ${filtro.clause}`;
+          queryParams = { ...queryParams, ...filtro.params };
+        }
       }
 
       // Obtener campos visibles en grilla
@@ -118,10 +220,10 @@ export async function GET(request: NextRequest) {
       camposGrilla.forEach((campo: any) => {
         if (campo.TipoDato === 'Lista' && campo.ListaId) {
           const alias = `lv${joinCounter++}`;
-          joins.push(`LEFT JOIN TD_VALORES_LISTA ${alias} ON t.${campo.Nombre} = ${alias}.Id AND ${alias}.ListaId = ${campo.ListaId}`);
-          selects.push(`${alias}.Valor as ${campo.Nombre}`);
+          joins.push(`LEFT JOIN TD_VALORES_LISTA ${alias} ON t.[${campo.NombreColumna}] = ${alias}.Id AND ${alias}.ListaId = ${campo.ListaId}`);
+          selects.push(`${alias}.Valor as [${campo.Nombre}]`);
         } else {
-          selects.push(`t.${campo.Nombre}`);
+          selects.push(`t.[${campo.NombreColumna}] as [${campo.Nombre}]`);
         }
       });
 
@@ -132,22 +234,25 @@ export async function GET(request: NextRequest) {
         `SELECT TOP 10 ${selectClause}
          FROM ${tableName} t
          ${joinClause}
-         WHERE t.${campoFiltro} = @valorFiltro AND t.Estado = 'Activo'
+         WHERE ${whereClause}
          ORDER BY t.FechaCreacion DESC`,
-        { valorFiltro }
+        queryParams
       );
 
-      // Obtener el nombre del valor del filtro si es una lista
-      const campoFiltroInfo = campos.find((c: any) => c.Nombre === campoFiltro);
-      let nombreValorFiltro = valorFiltro;
-      
-      if (campoFiltroInfo && campoFiltroInfo.TipoDato === 'Lista' && campoFiltroInfo.ListaId) {
-        const valorFiltroResult = await query(
-          `SELECT Valor FROM TD_VALORES_LISTA WHERE Id = @valorFiltro`,
-          { valorFiltro }
-        );
-        if (valorFiltroResult.length > 0) {
-          nombreValorFiltro = valorFiltroResult[0].Valor;
+      // Obtener el nombre del valor del filtro si es una lista y está activo
+      let nombreValorFiltro = null;
+      if (cfg.FiltroActivo && cfg.CampoFiltro && cfg.ValorFiltro) {
+        const campoFiltroInfo = campos.find((c: any) => c.Nombre === cfg.CampoFiltro);
+        nombreValorFiltro = cfg.ValorFiltro;
+        
+        if (campoFiltroInfo && campoFiltroInfo.TipoDato === 'Lista' && campoFiltroInfo.ListaId) {
+          const valorFiltroResult = await query(
+            `SELECT Valor FROM TD_VALORES_LISTA WHERE ListaId = @listaId AND Valor = @valor`,
+            { listaId: campoFiltroInfo.ListaId, valor: cfg.ValorFiltro }
+          );
+          if (valorFiltroResult.length > 0) {
+            nombreValorFiltro = valorFiltroResult[0].Valor;
+          }
         }
       }
 

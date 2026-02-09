@@ -29,10 +29,12 @@ interface ConfigWidget {
   id: string;
   ModuloId: number;
   ModuloNombre: string;
-  TipoVisualizacion: "Agrupamiento" | "DetalleFiltrado";
+  TipoVisualizacion: "Agrupamiento" | "DetalleFiltrado" | "Totalizado";
   CampoAgrupamiento: string | null;
   CampoFiltro: string | null;
   ValorFiltro: string | null;
+  FiltroOperador: string | null;
+  FiltroActivo: boolean;
 }
 
 interface ValorLista {
@@ -167,6 +169,8 @@ export default function DashboardConfigPage() {
           CampoAgrupamiento: config.CampoAgrupamiento,
           CampoFiltro: config.CampoFiltro,
           ValorFiltro: config.ValorFiltro,
+          FiltroOperador: config.FiltroOperador || '=',
+          FiltroActivo: config.FiltroActivo || false,
         }));
         setWidgets(widgetsExistentes);
       } else {
@@ -186,6 +190,8 @@ export default function DashboardConfigPage() {
       CampoAgrupamiento: null,
       CampoFiltro: null,
       ValorFiltro: null,
+      FiltroOperador: "=",
+      FiltroActivo: false,
     };
     setWidgets([...widgets, nuevoWidget]);
   };
@@ -328,10 +334,11 @@ export default function DashboardConfigPage() {
         return;
       }
 
-      if (widget.TipoVisualizacion === "DetalleFiltrado" && (!widget.CampoFiltro || !widget.ValorFiltro)) {
+      // Validar filtro opcional para DetalleFiltrado y Totalizado
+      if (widget.FiltroActivo && (!widget.CampoFiltro || !widget.ValorFiltro)) {
         toast({
           title: "Error",
-          description: `El widget de ${widget.ModuloNombre} tipo Detalle Filtrado debe tener campo y valor de filtro`,
+          description: `El widget de ${widget.ModuloNombre} con filtro activo debe tener campo y valor de filtro`,
           variant: "destructive",
         });
         return;
@@ -356,6 +363,8 @@ export default function DashboardConfigPage() {
             CampoAgrupamiento: w.CampoAgrupamiento,
             CampoFiltro: w.CampoFiltro,
             ValorFiltro: w.ValorFiltro,
+            FiltroOperador: w.FiltroOperador || '=',
+            FiltroActivo: w.FiltroActivo || false,
           })),
         }),
       });
@@ -511,48 +520,22 @@ export default function DashboardConfigPage() {
                                 className="w-full h-10 px-3 rounded-md border border-input bg-background"
                                 disabled={!widget.ModuloId}
                               >
-                                <option value="Agrupamiento">
-                                  <BarChart3 className="inline mr-2" />
-                                  Agrupamiento
-                                </option>
-                                <option value="DetalleFiltrado">
-                                  <Table2 className="inline mr-2" />
-                                  Detalle Filtrado
-                                </option>
+                                <option value="Agrupamiento">Agrupamiento</option>
+                                <option value="DetalleFiltrado">Detalle Filtrado</option>
+                                <option value="Totalizado">Totalizado</option>
                               </select>
                             </div>
                           </div>
 
                           {widget.ModuloId && widget.TipoVisualizacion === "Agrupamiento" && (
-                            <div className="space-y-2">
-                              <Label>Campo de Agrupamiento</Label>
-                              <select
-                                value={widget.CampoAgrupamiento || ""}
-                                onChange={(e) =>
-                                  actualizarWidget(widget.id, "CampoAgrupamiento", e.target.value)
-                                }
-                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                              >
-                                <option value="">Seleccione un campo...</option>
-                                {getCamposPorTipo(widget.ModuloId).map((campo) => (
-                                  <option key={campo.Nombre} value={campo.Nombre}>
-                                    {campo.Nombre}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-
-                          {widget.ModuloId && widget.TipoVisualizacion === "DetalleFiltrado" && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <>
                               <div className="space-y-2">
-                                <Label>Campo de Filtro</Label>
+                                <Label>Campo de Agrupamiento</Label>
                                 <select
-                                  value={widget.CampoFiltro || ""}
-                                  onChange={(e) => {
-                                    actualizarWidget(widget.id, "CampoFiltro", e.target.value);
-                                    actualizarWidget(widget.id, "ValorFiltro", null);
-                                  }}
+                                  value={widget.CampoAgrupamiento || ""}
+                                  onChange={(e) =>
+                                    actualizarWidget(widget.id, "CampoAgrupamiento", e.target.value)
+                                  }
                                   className="w-full h-10 px-3 rounded-md border border-input bg-background"
                                 >
                                   <option value="">Seleccione un campo...</option>
@@ -564,46 +547,290 @@ export default function DashboardConfigPage() {
                                 </select>
                               </div>
 
-                              <div className="space-y-2">
-                                <Label>Valor del Filtro</Label>
-                                {(() => {
-                                  const campo = getCamposPorTipo(widget.ModuloId).find(
-                                    c => c.Nombre === widget.CampoFiltro
-                                  );
-                                  
-                                  if (campo?.ListaId && valoresLista[campo.ListaId]) {
-                                    return (
+                              <div className="border-t pt-4 space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="checkbox"
+                                    id={`filtro-${widget.id}`}
+                                    checked={widget.FiltroActivo}
+                                    onChange={(e) => actualizarWidget(widget.id, "FiltroActivo", e.target.checked)}
+                                    className="h-4 w-4"
+                                  />
+                                  <Label htmlFor={`filtro-${widget.id}`} className="font-normal">
+                                    Aplicar filtro opcional
+                                  </Label>
+                                </div>
+
+                                {widget.FiltroActivo && (
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pl-6 border-l-2">
+                                    <div className="space-y-2">
+                                      <Label className="text-sm">Campo</Label>
                                       <select
-                                        value={widget.ValorFiltro || ""}
-                                        onChange={(e) =>
-                                          actualizarWidget(widget.id, "ValorFiltro", e.target.value)
-                                        }
-                                        className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                        value={widget.CampoFiltro || ""}
+                                        onChange={(e) => {
+                                          actualizarWidget(widget.id, "CampoFiltro", e.target.value);
+                                          actualizarWidget(widget.id, "ValorFiltro", null);
+                                        }}
+                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
                                       >
-                                        <option value="">Seleccione un valor...</option>
-                                        {valoresLista[campo.ListaId].map((valor) => (
-                                          <option key={valor.Id} value={valor.Id}>
-                                            {valor.Valor}
+                                        <option value="">Seleccione...</option>
+                                        {getCamposPorTipo(widget.ModuloId).map((campo) => (
+                                          <option key={campo.Nombre} value={campo.Nombre}>
+                                            {campo.Nombre}
                                           </option>
                                         ))}
                                       </select>
-                                    );
-                                  }
-                                  
-                                  return (
-                                    <input
-                                      type="text"
-                                      value={widget.ValorFiltro || ""}
-                                      onChange={(e) =>
-                                        actualizarWidget(widget.id, "ValorFiltro", e.target.value)
-                                      }
-                                      placeholder="Ingrese el valor del filtro"
-                                      className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                                      disabled={!widget.CampoFiltro}
-                                    />
-                                  );
-                                })()}
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label className="text-sm">Operador</Label>
+                                      <select
+                                        value={widget.FiltroOperador || "="}
+                                        onChange={(e) => actualizarWidget(widget.id, "FiltroOperador", e.target.value)}
+                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                      >
+                                        <option value="=">=</option>
+                                        <option value="<>">≠</option>
+                                        <option value="<">&lt;</option>
+                                        <option value=">">&gt;</option>
+                                        <option value="<=">≤</option>
+                                        <option value=">=">≥</option>
+                                      </select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label className="text-sm">Valor</Label>
+                                      {(() => {
+                                        const campo = getCamposPorTipo(widget.ModuloId).find(
+                                          c => c.Nombre === widget.CampoFiltro
+                                        );
+                                        
+                                        if (campo?.ListaId && valoresLista[campo.ListaId]) {
+                                          return (
+                                            <select
+                                              value={widget.ValorFiltro || ""}
+                                              onChange={(e) => actualizarWidget(widget.id, "ValorFiltro", e.target.value)}
+                                              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                            >
+                                              <option value="">Seleccione...</option>
+                                              {valoresLista[campo.ListaId].map((valor) => (
+                                                <option key={valor.Id} value={valor.Valor}>
+                                                  {valor.Valor}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          );
+                                        }
+                                        
+                                        return (
+                                          <input
+                                            type="text"
+                                            value={widget.ValorFiltro || ""}
+                                            onChange={(e) => actualizarWidget(widget.id, "ValorFiltro", e.target.value)}
+                                            placeholder="Valor"
+                                            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                            disabled={!widget.CampoFiltro}
+                                          />
+                                        );
+                                      })()}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
+                            </>
+                          )}
+
+                          {widget.ModuloId && widget.TipoVisualizacion === "DetalleFiltrado" && (
+                            <div className="space-y-2 border-t pt-4">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <input
+                                  type="checkbox"
+                                  id={`filtro-det-${widget.id}`}
+                                  checked={widget.FiltroActivo}
+                                  onChange={(e) => actualizarWidget(widget.id, "FiltroActivo", e.target.checked)}
+                                  className="h-4 w-4"
+                                />
+                                <Label htmlFor={`filtro-det-${widget.id}`} className="font-normal">
+                                  Aplicar filtro
+                                </Label>
+                              </div>
+
+                              {widget.FiltroActivo && (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-6 border-l-2">
+                                  <div className="space-y-2">
+                                    <Label>Campo de Filtro</Label>
+                                    <select
+                                      value={widget.CampoFiltro || ""}
+                                      onChange={(e) => {
+                                        actualizarWidget(widget.id, "CampoFiltro", e.target.value);
+                                        actualizarWidget(widget.id, "ValorFiltro", null);
+                                      }}
+                                      className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                    >
+                                      <option value="">Seleccione un campo...</option>
+                                      {getCamposPorTipo(widget.ModuloId).map((campo) => (
+                                        <option key={campo.Nombre} value={campo.Nombre}>
+                                          {campo.Nombre}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label>Operador</Label>
+                                    <select
+                                      value={widget.FiltroOperador || "="}
+                                      onChange={(e) => actualizarWidget(widget.id, "FiltroOperador", e.target.value)}
+                                      className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                    >
+                                      <option value="=">=</option>
+                                      <option value="<>">≠</option>
+                                      <option value="<">&lt;</option>
+                                      <option value=">">&gt;</option>
+                                      <option value="<=">≤</option>
+                                      <option value=">=">≥</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label>Valor del Filtro</Label>
+                                    {(() => {
+                                      const campo = getCamposPorTipo(widget.ModuloId).find(
+                                        c => c.Nombre === widget.CampoFiltro
+                                      );
+                                      
+                                      if (campo?.ListaId && valoresLista[campo.ListaId]) {
+                                        return (
+                                          <select
+                                            value={widget.ValorFiltro || ""}
+                                            onChange={(e) =>
+                                              actualizarWidget(widget.id, "ValorFiltro", e.target.value)
+                                            }
+                                            className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                          >
+                                            <option value="">Seleccione un valor...</option>
+                                            {valoresLista[campo.ListaId].map((valor) => (
+                                              <option key={valor.Id} value={valor.Valor}>
+                                                {valor.Valor}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        );
+                                      }
+                                      
+                                      return (
+                                        <input
+                                          type="text"
+                                          value={widget.ValorFiltro || ""}
+                                          onChange={(e) =>
+                                            actualizarWidget(widget.id, "ValorFiltro", e.target.value)
+                                          }
+                                          placeholder="Ingrese el valor del filtro"
+                                          className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                          disabled={!widget.CampoFiltro}
+                                        />
+                                      );
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {widget.ModuloId && widget.TipoVisualizacion === "Totalizado" && (
+                            <div className="space-y-2 border-t pt-4">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <input
+                                  type="checkbox"
+                                  id={`filtro-tot-${widget.id}`}
+                                  checked={widget.FiltroActivo}
+                                  onChange={(e) => actualizarWidget(widget.id, "FiltroActivo", e.target.checked)}
+                                  className="h-4 w-4"
+                                />
+                                <Label htmlFor={`filtro-tot-${widget.id}`} className="font-normal">
+                                  Aplicar filtro al total
+                                </Label>
+                              </div>
+
+                              {widget.FiltroActivo && (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-6 border-l-2">
+                                  <div className="space-y-2">
+                                    <Label>Campo de Filtro</Label>
+                                    <select
+                                      value={widget.CampoFiltro || ""}
+                                      onChange={(e) => {
+                                        actualizarWidget(widget.id, "CampoFiltro", e.target.value);
+                                        actualizarWidget(widget.id, "ValorFiltro", null);
+                                      }}
+                                      className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                    >
+                                      <option value="">Seleccione un campo...</option>
+                                      {getCamposPorTipo(widget.ModuloId).map((campo) => (
+                                        <option key={campo.Nombre} value={campo.Nombre}>
+                                          {campo.Nombre}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label>Operador</Label>
+                                    <select
+                                      value={widget.FiltroOperador || "="}
+                                      onChange={(e) => actualizarWidget(widget.id, "FiltroOperador", e.target.value)}
+                                      className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                    >
+                                      <option value="=">=</option>
+                                      <option value="<>">≠</option>
+                                      <option value="<">&lt;</option>
+                                      <option value=">">&gt;</option>
+                                      <option value="<=">≤</option>
+                                      <option value=">=">≥</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label>Valor del Filtro</Label>
+                                    {(() => {
+                                      const campo = getCamposPorTipo(widget.ModuloId).find(
+                                        c => c.Nombre === widget.CampoFiltro
+                                      );
+                                      
+                                      if (campo?.ListaId && valoresLista[campo.ListaId]) {
+                                        return (
+                                          <select
+                                            value={widget.ValorFiltro || ""}
+                                            onChange={(e) =>
+                                              actualizarWidget(widget.id, "ValorFiltro", e.target.value)
+                                            }
+                                            className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                          >
+                                            <option value="">Seleccione un valor...</option>
+                                            {valoresLista[campo.ListaId].map((valor) => (
+                                              <option key={valor.Id} value={valor.Valor}>
+                                                {valor.Valor}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        );
+                                      }
+                                      
+                                      return (
+                                        <input
+                                          type="text"
+                                          value={widget.ValorFiltro || ""}
+                                          onChange={(e) =>
+                                            actualizarWidget(widget.id, "ValorFiltro", e.target.value)
+                                          }
+                                          placeholder="Ingrese el valor del filtro"
+                                          className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                          disabled={!widget.CampoFiltro}
+                                        />
+                                      );
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

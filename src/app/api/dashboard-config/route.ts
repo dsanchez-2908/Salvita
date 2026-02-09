@@ -106,8 +106,8 @@ export async function POST(request: NextRequest) {
       
       await execute(
         `INSERT INTO TD_DASHBOARD_CONFIG 
-         (RolId, ModuloId, TipoVisualizacion, CampoAgrupamiento, CampoFiltro, ValorFiltro, Orden, UsuarioCreacion)
-         VALUES (@rolId, @moduloId, @tipoVisualizacion, @campoAgrupamiento, @campoFiltro, @valorFiltro, @orden, @usuarioCreacion)`,
+         (RolId, ModuloId, TipoVisualizacion, CampoAgrupamiento, CampoFiltro, ValorFiltro, FiltroOperador, FiltroActivo, Orden, UsuarioCreacion)
+         VALUES (@rolId, @moduloId, @tipoVisualizacion, @campoAgrupamiento, @campoFiltro, @valorFiltro, @filtroOperador, @filtroActivo, @orden, @usuarioCreacion)`,
         {
           rolId: RolId,
           moduloId: config.ModuloId,
@@ -115,6 +115,8 @@ export async function POST(request: NextRequest) {
           campoAgrupamiento: config.CampoAgrupamiento || null,
           campoFiltro: config.CampoFiltro || null,
           valorFiltro: config.ValorFiltro || null,
+          filtroOperador: config.FiltroOperador || '=',
+          filtroActivo: config.FiltroActivo || false,
           orden: i,
           usuarioCreacion: user.usuario,
         }

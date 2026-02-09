@@ -62,7 +62,7 @@ export async function GET(
       .join(', ');
 
     // Construir WHERE clause
-    let whereClause = "WHERE Estado = 'Activo'";
+    let whereClause = "WHERE 1=1";
     const dbRequest = pool.request();
     
     // Si es un módulo secundario y se proporciona parentId, filtrar por el padre
@@ -82,7 +82,7 @@ export async function GET(
 
     // Obtener datos de la tabla dinámica
     const datosResult = await dbRequest.query(`
-        SELECT Id, ${selectColumns}, Estado, FechaCreacion, FechaModificacion, 
+        SELECT Id, ${selectColumns}, FechaCreacion, FechaModificacion, 
                UsuarioCreacion, UsuarioModificacion
         FROM [${tableName}]
         ${whereClause}
@@ -477,19 +477,40 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const modulo = moduloResult.recordset[0];
     const tableName = modulo.NombreTabla;
 
-    await pool
+    // Verificar si la tabla tiene columna Estado para soft delete
+    const columnasResult = await pool
       .request()
-      .input("Id", sql.Int, parseInt(registroId))
-      .input("Estado", sql.NVarChar, "Inactivo")
-      .input("FechaModificacion", sql.DateTime, new Date())
-      .input("UsuarioModificacion", sql.NVarChar, user.usuario)
+      .input("tableName", sql.NVarChar, tableName)
       .query(`
-        UPDATE ${tableName}
-        SET Estado = @Estado,
-            FechaModificacion = @FechaModificacion,
-            UsuarioModificacion = @UsuarioModificacion
-        WHERE Id = @Id
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = @tableName AND COLUMN_NAME = 'Estado'
       `);
+
+    const tieneEstado = columnasResult.recordset.length > 0;
+
+    if (tieneEstado) {
+      // Soft delete: actualizar Estado a Inactivo
+      await pool
+        .request()
+        .input("Id", sql.Int, parseInt(registroId))
+        .input("Estado", sql.NVarChar, "Inactivo")
+        .input("FechaModificacion", sql.DateTime, new Date())
+        .input("UsuarioModificacion", sql.NVarChar, user.usuario)
+        .query(`
+          UPDATE ${tableName}
+          SET Estado = @Estado,
+              FechaModificacion = @FechaModificacion,
+              UsuarioModificacion = @UsuarioModificacion
+          WHERE Id = @Id
+        `);
+    } else {
+      // Hard delete: eliminar físicamente el registro
+      await pool
+        .request()
+        .input("Id", sql.Int, parseInt(registroId))
+        .query(`DELETE FROM ${tableName} WHERE Id = @Id`);
+    }
 
     // Registrar traza
     await registrarTraza(

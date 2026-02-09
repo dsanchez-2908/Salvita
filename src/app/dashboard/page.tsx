@@ -2,21 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Shield, List, Folder, BarChart3, Table2 } from "lucide-react";
+import { Users, Shield, List, Folder, BarChart3, Table2, Calculator } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface DashboardConfig {
   Id: number;
   ModuloId: number;
   ModuloNombre: string;
-  TipoVisualizacion: "Agrupamiento" | "DetalleFiltrado";
+  TipoVisualizacion: "Agrupamiento" | "DetalleFiltrado" | "Totalizado";
   CampoAgrupamiento: string | null;
   CampoFiltro: string | null;
   ValorFiltro: string | null;
+  FiltroOperador: string | null;
+  FiltroActivo: boolean;
 }
 
 interface WidgetData {
   config: DashboardConfig;
+  total?: number;
+  filtroAplicado?: string | null;
   agrupados?: Array<{ [key: string]: any; Total: number }>;
   registros?: any[];
   campos?: any[];
@@ -175,6 +179,36 @@ export default function DashboardPage() {
     );
   };
 
+  const renderWidgetTotalizado = (widget: WidgetData) => {
+    const { config, total, filtroAplicado } = widget;
+    
+    return (
+      <Card key={config.Id}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Calculator className="h-5 w-5 text-purple-600" />
+            <CardTitle className="text-lg">{config.ModuloNombre}</CardTitle>
+          </div>
+          {filtroAplicado && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Filtrado: {filtroAplicado}
+            </p>
+          )}
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <p className="text-5xl font-bold text-purple-600">{total || 0}</p>
+              <p className="text-sm text-gray-500 mt-2">
+                {filtroAplicado ? "registros filtrados" : "registros totales"}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const renderWidgetDetalleFiltrado = (widget: WidgetData) => {
     const { config, registros, campos, nombreValorFiltro } = widget;
     
@@ -205,26 +239,56 @@ export default function DashboardPage() {
                 <tbody>
                   {registros.slice(0, 5).map((registro, index) => (
                     <tr key={index} className="border-b dark:border-gray-700">
-                      {campos && campos.slice(0, 5).map((campo: any) => (
-                        <td key={campo.Nombre} className="p-2">
-                          {campo.TipoDato === "Archivo" && registro[campo.Nombre] ? (
+                      {campos && campos.slice(0, 5).map((campo: any) => {
+                        const valor = registro[campo.Nombre];
+                        
+                        // Renderizar según tipo de dato
+                        let contenido;
+                        if (campo.TipoDato === "Archivo" && valor) {
+                          contenido = (
                             <button
-                              onClick={() => {
-                                const token = localStorage.getItem("token");
-                                window.open(
-                                  `/api/documentos/viewer?docId=${registro[campo.Nombre]}&token=${token}`,
-                                  "_blank"
-                                );
+                              onClick={async () => {
+                                try {
+                                  const token = localStorage.getItem("token");
+                                  const response = await fetch(
+                                    `/api/documentos/viewer?documentId=${valor}&token=${token}`
+                                  );
+                                  const data = await response.json();
+                                  if (data.success && data.viewerUrl) {
+                                    window.open(data.viewerUrl, "_blank");
+                                  } else {
+                                    console.error("Error obteniendo URL del visor:", data.error);
+                                  }
+                                } catch (error) {
+                                  console.error("Error:", error);
+                                }
                               }}
                               className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
                             >
                               Ver
                             </button>
-                          ) : (
-                            registro[campo.Nombre] || "-"
-                          )}
-                        </td>
-                      ))}
+                          );
+                        } else if ((campo.TipoDato === "Fecha" || campo.TipoDato === "FechaHora") && valor) {
+                          // Formatear fecha
+                          const fecha = new Date(valor);
+                          if (campo.TipoDato === "Fecha") {
+                            contenido = fecha.toLocaleDateString('es-AR');
+                          } else {
+                            contenido = fecha.toLocaleString('es-AR', { 
+                              dateStyle: 'short', 
+                              timeStyle: 'short' 
+                            });
+                          }
+                        } else {
+                          contenido = valor || "-";
+                        }
+                        
+                        return (
+                          <td key={campo.Nombre} className="p-2">
+                            {contenido}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -343,6 +407,8 @@ return (
             return renderWidgetAgrupamiento(widget);
           } else if (widget.config.TipoVisualizacion === "DetalleFiltrado") {
             return renderWidgetDetalleFiltrado(widget);
+          } else if (widget.config.TipoVisualizacion === "Totalizado") {
+            return renderWidgetTotalizado(widget);
           }
           return null;
         })}

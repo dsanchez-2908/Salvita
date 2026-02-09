@@ -40,7 +40,7 @@ export default function RolesPage() {
         fetch("/api/roles", {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch("/api/modulos", {
+        fetch("/api/modulos-v2/estructura", {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -52,19 +52,53 @@ export default function RolesPage() {
 
       if (rolesData.success) setRoles(rolesData.data);
       if (modulosData.success) {
-        setModulos(modulosData.data);
-        // Inicializar permisos para todos los módulos
-        setFormData((prev) => ({
-          ...prev,
-          Permisos: modulosData.data.map((m: any) => ({
-            ModuloId: m.Id,
-            ModuloNombre: m.Nombre,
-            PermisoVer: true,
+        // Construir permisos por relación padre-hijo
+        const todosLosPermisos: any[] = [];
+        
+        modulosData.data.forEach((padre: any) => {
+          // Permiso para el módulo principal
+          todosLosPermisos.push({
+            ModuloPadreId: null,
+            ModuloId: padre.Id,
+            ModuloNombre: padre.Nombre,
+            ModuloPadreNombre: null,
+            Tipo: 'Principal',
+            TieneHijos: padre.TieneHijos,
+            Orden: padre.Orden,
+            PermisoVer: false,
             PermisoVerAgrupado: false,
             PermisoAgregar: false,
             PermisoModificar: false,
             PermisoEliminar: false,
-          })),
+          });
+          
+          // Permisos para cada hijo en el contexto de este padre
+          if (padre.ModulosHijos && padre.ModulosHijos.length > 0) {
+            padre.ModulosHijos.forEach((hijo: any) => {
+              todosLosPermisos.push({
+                ModuloPadreId: padre.Id,
+                ModuloId: hijo.Id,
+                ModuloNombre: hijo.Nombre,
+                ModuloPadreNombre: padre.Nombre,
+                Tipo: 'Secundario',
+                TieneHijos: false,
+                Orden: hijo.Orden,
+                PermisoVer: false,
+                PermisoVerAgrupado: false,
+                PermisoAgregar: false,
+                PermisoModificar: false,
+                PermisoEliminar: false,
+              });
+            });
+          }
+        });
+        
+        setModulos(todosLosPermisos);
+        
+        // Inicializar permisos
+        setFormData((prev) => ({
+          ...prev,
+          Permisos: todosLosPermisos,
         }));
       }
     } catch (error) {
@@ -132,16 +166,24 @@ export default function RolesPage() {
       if (data.success) {
         setEditingId(id);
         
-        // Mapear permisos existentes con todos los módulos
+        // Mapear permisos existentes usando clave compuesta (ModuloPadreId, ModuloId)
         const permisosMap = new Map(
-          data.data.Permisos?.map((p: any) => [p.ModuloId, p]) || []
+          data.data.Permisos?.map((p: any) => 
+            [`${p.ModuloPadreId || 'null'}-${p.ModuloId}`, p]
+          ) || []
         );
 
         const permisos = modulos.map((m) => {
-          const permiso = permisosMap.get(m.Id);
+          const key = `${m.ModuloPadreId || 'null'}-${m.ModuloId}`;
+          const permiso = permisosMap.get(key);
           return {
-            ModuloId: m.Id,
-            ModuloNombre: m.Nombre,
+            ModuloPadreId: m.ModuloPadreId,
+            ModuloId: m.ModuloId,
+            ModuloNombre: m.ModuloNombre,
+            ModuloPadreNombre: m.ModuloPadreNombre,
+            Tipo: m.Tipo,
+            TieneHijos: m.TieneHijos,
+            Orden: m.Orden,
             PermisoVer: permiso?.PermisoVer || false,
             PermisoVerAgrupado: permiso?.PermisoVerAgrupado || false,
             PermisoAgregar: permiso?.PermisoAgregar || false,
@@ -215,38 +257,25 @@ export default function RolesPage() {
       Descripcion: "",
       Estado: "Activo",
       AccesoTrazas: false,
-      Permisos: modulos.map((m) => ({
-        ModuloId: m.Id,
-        ModuloNombre: m.Nombre,
-        PermisoVer: true,
-        PermisoVerAgrupado: false,
-        PermisoAgregar: false,
-        PermisoModificar: false,
-        PermisoEliminar: false,
-      })),
+      Permisos: modulos.map((m) => ({ ...m })),
     });
   };
 
-  const updatePermiso = (moduloId: number, campo: string, valor: boolean) => {
+  const updatePermiso = (moduloPadreId: number | null, moduloId: number, campo: string, valor: boolean) => {
     setFormData({
       ...formData,
       Permisos: formData.Permisos.map((p) =>
-        p.ModuloId === moduloId ? { ...p, [campo]: valor } : p
+        (p.ModuloPadreId === moduloPadreId && p.ModuloId === moduloId) 
+          ? { ...p, [campo]: valor } 
+          : p
       ),
     });
   };
 
-  const getModuloPadre = (moduloId: number) => {
-    const modulo = modulos.find(m => m.Id === moduloId);
-    if (modulo && modulo.ModuloPrincipalId) {
-      const padre = modulos.find(m => m.Id === modulo.ModuloPrincipalId);
-      return padre ? padre.Nombre : null;
-    }
-    return null;
-  };
-
-  const getModuloInfo = (moduloId: number) => {
-    const modulo = modulos.find(m => m.Id === moduloId);
+  const getModuloInfo = (moduloPadreId: number | null, moduloId: number) => {
+    const modulo = modulos.find(m => 
+      m.ModuloPadreId === moduloPadreId && m.ModuloId === moduloId
+    );
     return modulo;
   };
 
@@ -417,22 +446,14 @@ export default function RolesPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {/* Primero módulos principales */}
+                        {/* Módulos principales */}
                         {formData.Permisos
-                          .filter((permiso) => {
-                            const modulo = getModuloInfo(permiso.ModuloId);
-                            return modulo && modulo.Tipo === "Principal";
-                          })
-                          .sort((a, b) => {
-                            const moduloA = getModuloInfo(a.ModuloId);
-                            const moduloB = getModuloInfo(b.ModuloId);
-                            return (moduloA?.Orden || 0) - (moduloB?.Orden || 0);
-                          })
+                          .filter((permiso) => permiso.Tipo === "Principal")
+                          .sort((a, b) => (a.Orden || 0) - (b.Orden || 0))
                           .map((permiso) => {
-                            const modulo = getModuloInfo(permiso.ModuloId);
                             return (
                               <>
-                                <tr key={permiso.ModuloId} className="bg-blue-50 dark:bg-blue-900/20 font-medium border-b">
+                                <tr key={`principal-${permiso.ModuloId}`} className="bg-blue-50 dark:bg-blue-900/20 font-medium border-b">
                                   <td className="p-3">
                                     <div className="flex items-center gap-2">
                                       <span className="px-2 py-0.5 text-xs rounded bg-blue-600 text-white font-semibold">
@@ -447,6 +468,7 @@ export default function RolesPage() {
                                       checked={permiso.PermisoVer}
                                       onChange={(e) =>
                                         updatePermiso(
+                                          permiso.ModuloPadreId,
                                           permiso.ModuloId,
                                           "PermisoVer",
                                           e.target.checked
@@ -455,19 +477,24 @@ export default function RolesPage() {
                                       className="w-4 h-4"
                                     />
                                   </td>
-                                  <td className="text-center p-3">
-                                    <input
-                                      type="checkbox"
-                                      checked={permiso.PermisoVerAgrupado}
-                                      onChange={(e) =>
-                                        updatePermiso(
-                                          permiso.ModuloId,
-                                          "PermisoVerAgrupado",
-                                          e.target.checked
-                                        )
-                                      }
-                                      className="w-4 h-4"
-                                    />
+                                  <td className={`text-center p-3 ${!permiso.TieneHijos ? 'bg-gray-100 dark:bg-gray-900' : ''}`}>
+                                    {permiso.TieneHijos ? (
+                                      <input
+                                        type="checkbox"
+                                        checked={permiso.PermisoVerAgrupado}
+                                        onChange={(e) =>
+                                          updatePermiso(
+                                            permiso.ModuloPadreId,
+                                            permiso.ModuloId,
+                                            "PermisoVerAgrupado",
+                                            e.target.checked
+                                          )
+                                        }
+                                        className="w-4 h-4"
+                                      />
+                                    ) : (
+                                      <span className="text-xs text-gray-400">N/A</span>
+                                    )}
                                   </td>
                                   <td className="text-center p-3">
                                     <input
@@ -475,6 +502,7 @@ export default function RolesPage() {
                                       checked={permiso.PermisoAgregar}
                                       onChange={(e) =>
                                         updatePermiso(
+                                          permiso.ModuloPadreId,
                                           permiso.ModuloId,
                                           "PermisoAgregar",
                                           e.target.checked
@@ -489,6 +517,7 @@ export default function RolesPage() {
                                       checked={permiso.PermisoModificar}
                                       onChange={(e) =>
                                         updatePermiso(
+                                          permiso.ModuloPadreId,
                                           permiso.ModuloId,
                                           "PermisoModificar",
                                           e.target.checked
@@ -503,6 +532,7 @@ export default function RolesPage() {
                                       checked={permiso.PermisoEliminar}
                                       onChange={(e) =>
                                         updatePermiso(
+                                          permiso.ModuloPadreId,
                                           permiso.ModuloId,
                                           "PermisoEliminar",
                                           e.target.checked
@@ -515,17 +545,10 @@ export default function RolesPage() {
                                 
                                 {/* Módulos secundarios de este principal */}
                                 {formData.Permisos
-                                  .filter((p) => {
-                                    const mod = getModuloInfo(p.ModuloId);
-                                    return mod && mod.Tipo === "Secundario" && mod.ModuloPrincipalId === permiso.ModuloId;
-                                  })
-                                  .sort((a, b) => {
-                                    const moduloA = getModuloInfo(a.ModuloId);
-                                    const moduloB = getModuloInfo(b.ModuloId);
-                                    return (moduloA?.Orden || 0) - (moduloB?.Orden || 0);
-                                  })
+                                  .filter((p) => p.Tipo === "Secundario" && p.ModuloPadreId === permiso.ModuloId)
+                                  .sort((a, b) => (a.Orden || 0) - (b.Orden || 0))
                                   .map((permisoSec) => (
-                                    <tr key={permisoSec.ModuloId} className="bg-gray-50 dark:bg-gray-800/50 border-b">
+                                    <tr key={`secundario-${permisoSec.ModuloPadreId}-${permisoSec.ModuloId}`} className="bg-gray-50 dark:bg-gray-800/50 border-b">
                                       <td className="p-3">
                                         <div className="flex items-center gap-2 pl-8">
                                           <span className="text-gray-400">└─</span>
@@ -541,6 +564,7 @@ export default function RolesPage() {
                                           checked={permisoSec.PermisoVer}
                                           onChange={(e) =>
                                             updatePermiso(
+                                              permisoSec.ModuloPadreId,
                                               permisoSec.ModuloId,
                                               "PermisoVer",
                                               e.target.checked
@@ -550,7 +574,7 @@ export default function RolesPage() {
                                         />
                                       </td>
                                       <td className="text-center bg-gray-100 dark:bg-gray-900 p-3">
-                                        {/* Ver Agrupado no aplica a secundarios */}
+                                        <span className="text-xs text-gray-400">N/A</span>
                                       </td>
                                       <td className="text-center p-3">
                                         <input
@@ -558,6 +582,7 @@ export default function RolesPage() {
                                           checked={permisoSec.PermisoAgregar}
                                           onChange={(e) =>
                                             updatePermiso(
+                                              permisoSec.ModuloPadreId,
                                               permisoSec.ModuloId,
                                               "PermisoAgregar",
                                               e.target.checked
@@ -572,6 +597,7 @@ export default function RolesPage() {
                                           checked={permisoSec.PermisoModificar}
                                           onChange={(e) =>
                                             updatePermiso(
+                                              permisoSec.ModuloPadreId,
                                               permisoSec.ModuloId,
                                               "PermisoModificar",
                                               e.target.checked
@@ -586,6 +612,7 @@ export default function RolesPage() {
                                           checked={permisoSec.PermisoEliminar}
                                           onChange={(e) =>
                                             updatePermiso(
+                                              permisoSec.ModuloPadreId,
                                               permisoSec.ModuloId,
                                               "PermisoEliminar",
                                               e.target.checked
@@ -599,92 +626,6 @@ export default function RolesPage() {
                               </>
                             );
                           })}
-                        
-                        {/* Módulos secundarios sin padre asignado */}
-                        {formData.Permisos
-                          .filter((permiso) => {
-                            const modulo = getModuloInfo(permiso.ModuloId);
-                            return modulo && modulo.Tipo === "Secundario" && !modulo.ModuloPrincipalId;
-                          })
-                          .sort((a, b) => {
-                            const moduloA = getModuloInfo(a.ModuloId);
-                            const moduloB = getModuloInfo(b.ModuloId);
-                            return (moduloA?.Orden || 0) - (moduloB?.Orden || 0);
-                          })
-                          .map((permiso) => (
-                            <tr key={permiso.ModuloId} className="bg-yellow-50 dark:bg-yellow-900/20 border-b">
-                              <td className="p-3">
-                                <div className="flex items-center gap-2">
-                                  <span className="px-2 py-0.5 text-xs rounded bg-yellow-600 text-white">
-                                    Secundario
-                                  </span>
-                                  <span>{permiso.ModuloNombre}</span>
-                                  <span className="text-xs text-yellow-700 dark:text-yellow-400">
-                                    (sin padre asignado)
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="text-center p-3">
-                                <input
-                                  type="checkbox"
-                                  checked={permiso.PermisoVer}
-                                  onChange={(e) =>
-                                    updatePermiso(
-                                      permiso.ModuloId,
-                                      "PermisoVer",
-                                      e.target.checked
-                                    )
-                                  }
-                                  className="w-4 h-4"
-                                />
-                              </td>
-                              <td className="text-center bg-gray-100 dark:bg-gray-900 p-3">
-                                {/* Ver Agrupado no aplica a secundarios */}
-                              </td>
-                              <td className="text-center p-3">
-                                <input
-                                  type="checkbox"
-                                  checked={permiso.PermisoAgregar}
-                                  onChange={(e) =>
-                                    updatePermiso(
-                                      permiso.ModuloId,
-                                      "PermisoAgregar",
-                                      e.target.checked
-                                    )
-                                  }
-                                  className="w-4 h-4"
-                                />
-                              </td>
-                              <td className="text-center p-3">
-                                <input
-                                  type="checkbox"
-                                  checked={permiso.PermisoModificar}
-                                  onChange={(e) =>
-                                    updatePermiso(
-                                      permiso.ModuloId,
-                                      "PermisoModificar",
-                                      e.target.checked
-                                    )
-                                  }
-                                  className="w-4 h-4"
-                                />
-                              </td>
-                              <td className="text-center p-3">
-                                <input
-                                  type="checkbox"
-                                  checked={permiso.PermisoEliminar}
-                                  onChange={(e) =>
-                                    updatePermiso(
-                                      permiso.ModuloId,
-                                      "PermisoEliminar",
-                                      e.target.checked
-                                    )
-                                  }
-                                  className="w-4 h-4"
-                                />
-                              </td>
-                            </tr>
-                          ))}
                       </tbody>
                     </table>
                   </div>

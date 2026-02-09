@@ -61,8 +61,52 @@ export async function GET(req: NextRequest) {
     const request = pool.request();
 
     if (proceso) {
-      query += " AND t.Proceso LIKE @proceso";
-      request.input("proceso", sql.NVarChar, `%${proceso}%`);
+      // Si el proceso es un módulo (ej: "Módulo: Alumnos v4"), buscar también sus hijos
+      if (proceso.startsWith("Módulo: ")) {
+        const nombreModulo = proceso.substring(8); // Extraer el nombre después de "Módulo: "
+        
+        // Buscar el módulo y sus hijos
+        const modulosResult = await pool
+          .request()
+          .input("nombreModulo", sql.NVarChar, nombreModulo)
+          .query(`
+            -- Obtener el ID del módulo padre
+            DECLARE @ModuloPadreId INT;
+            SELECT @ModuloPadreId = Id FROM TD_MODULOS WHERE Nombre = @nombreModulo;
+            
+            -- Obtener el nombre del módulo padre y todos sus hijos
+            SELECT Nombre 
+            FROM TD_MODULOS 
+            WHERE Id = @ModuloPadreId
+            
+            UNION
+            
+            SELECT m.Nombre
+            FROM TR_MODULO_RELACION r
+            INNER JOIN TD_MODULOS m ON r.ModuloHijoId = m.Id
+            WHERE r.ModuloPadreId = @ModuloPadreId
+          `);
+        
+        // Construir una lista de procesos (módulo padre + hijos)
+        const procesosModulos = modulosResult.recordset.map(m => `Módulo: ${m.Nombre}`);
+        
+        if (procesosModulos.length > 0) {
+          // Usar IN para buscar cualquiera de estos procesos
+          const placeholders = procesosModulos.map((_, index) => `@proceso${index}`).join(", ");
+          query += ` AND t.Proceso IN (${placeholders})`;
+          procesosModulos.forEach((proc, index) => {
+            request.input(`proceso${index}`, sql.NVarChar, proc);
+          });
+        } else {
+          // Si no se encontró el módulo, buscar como antes
+          query += " AND t.Proceso LIKE @proceso";
+          request.input("proceso", sql.NVarChar, `%${proceso}%`);
+        }
+      } else {
+        // Para otros tipos de proceso (no módulos), buscar como antes
+        query += " AND t.Proceso LIKE @proceso";
+        request.input("proceso", sql.NVarChar, `%${proceso}%`);
+      }
     }
 
     if (fechaDesde) {

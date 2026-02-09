@@ -20,7 +20,16 @@ export async function GET(request: NextRequest) {
     if (id) {
       // Obtener una lista específica con sus valores
       const lista = await query(
-        'SELECT * FROM TD_LISTAS WHERE Id = @id',
+        `SELECT l.*, 
+                m.Nombre as ModuloOrigenNombre,
+                cv.Nombre as CampoValorNombre, cv.NombreColumna as CampoValorColumna,
+                cf.Nombre as FiltroCampoNombre, cf.NombreColumna as FiltroCampoColumna,
+                cf.TipoDato as FiltroCampoTipoDato, cf.ListaId as FiltroCampoListaId
+         FROM TD_LISTAS l
+         LEFT JOIN TD_MODULOS m ON l.ModuloOrigenId = m.Id
+         LEFT JOIN TD_CAMPOS cv ON l.CampoValorId = cv.Id
+         LEFT JOIN TD_CAMPOS cf ON l.FiltroCampoId = cf.Id
+         WHERE l.Id = @id`,
         { id: parseInt(id) }
       );
 
@@ -31,26 +40,103 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // Obtener valores de la lista
-      const valores = await query(
-        `SELECT * FROM TD_VALORES_LISTA 
-         WHERE ListaId = @listaId 
-         ORDER BY Orden, Valor`,
-        { listaId: parseInt(id) }
-      );
+      let valores = [];
+      const listaData = lista[0];
+
+      // Obtener valores según el tipo de lista
+      if (listaData.TipoLista === 'ValoresFijos') {
+        // Valores fijos desde TD_VALORES_LISTA
+        valores = await query(
+          `SELECT * FROM TD_VALORES_LISTA 
+           WHERE ListaId = @listaId 
+           ORDER BY Orden, Valor`,
+          { listaId: parseInt(id) }
+        );
+      } else if (listaData.TipoLista === 'ValoresModulo' && listaData.ModuloOrigenId) {
+        // Valores dinámicos desde módulo
+        const modulo = await query(
+          'SELECT NombreTabla FROM TD_MODULOS WHERE Id = @id',
+          { id: listaData.ModuloOrigenId }
+        );
+
+        if (modulo.length > 0) {
+          const tabla = modulo[0].NombreTabla;
+          const campoValor = listaData.CampoValorColumna;
+
+          // Construir query dinámico
+          let dynamicQuery = `SELECT Id, [${campoValor}] as Valor FROM [dbo].[${tabla}]`;
+          
+          // Agregar filtro si está activo
+          if (listaData.FiltroActivo && listaData.FiltroCampoColumna && listaData.FiltroOperador && listaData.FiltroValor) {
+            const operador = listaData.FiltroOperador;
+            let valorFiltro = listaData.FiltroValor;
+            
+            // Si el campo de filtro es de tipo Lista, buscar el ID del valor
+            if (listaData.FiltroCampoTipoDato === 'Lista' && listaData.FiltroCampoListaId) {
+              const valorLista = await query(
+                `SELECT Id FROM TD_VALORES_LISTA 
+                 WHERE ListaId = @listaId AND Valor = @valor`,
+                { 
+                  listaId: listaData.FiltroCampoListaId,
+                  valor: valorFiltro
+                }
+              );
+              
+              if (valorLista.length > 0) {
+                valorFiltro = valorLista[0].Id.toString();
+              } else {
+                // Si no encuentra el valor, no aplicar filtro (retornar vacío)
+                console.warn(`Valor "${valorFiltro}" no encontrado en lista ${listaData.FiltroCampoListaId}`);
+                valores = [];
+                return NextResponse.json<ApiResponse>({
+                  success: true,
+                  data: { ...listaData, Valores: valores },
+                });
+              }
+            }
+            
+            if (operador === 'LIKE') {
+              dynamicQuery += ` WHERE [${listaData.FiltroCampoColumna}] LIKE '%${valorFiltro}%'`;
+            } else {
+              // Para números, no usar comillas
+              const esNumero = !isNaN(Number(valorFiltro));
+              dynamicQuery += ` WHERE [${listaData.FiltroCampoColumna}] ${operador} ${esNumero ? valorFiltro : "'" + valorFiltro + "'"}`;
+            }
+          }
+
+          dynamicQuery += ` ORDER BY [${campoValor}]`;
+
+          try {
+            valores = await query(dynamicQuery);
+          } catch (err) {
+            console.error('Error obteniendo valores dinámicos:', err);
+            valores = [];
+          }
+        }
+      }
 
       return NextResponse.json<ApiResponse>({
         success: true,
-        data: { ...lista[0], Valores: valores },
+        data: { ...listaData, Valores: valores },
       });
     }
 
     // Obtener todas las listas
     const listas = await query(
-      `SELECT l.*, COUNT(v.Id) as CantidadValores
+      `SELECT l.*, 
+              COUNT(v.Id) as CantidadValores,
+              m.Nombre as ModuloOrigenNombre,
+              cv.Nombre as CampoValorNombre
        FROM TD_LISTAS l
        LEFT JOIN TD_VALORES_LISTA v ON l.Id = v.ListaId AND v.Estado = 'Activo'
-       GROUP BY l.Id, l.Nombre, l.Descripcion, l.Estado, l.FechaCreacion, l.FechaModificacion, l.UsuarioCreacion, l.UsuarioModificacion
+       LEFT JOIN TD_MODULOS m ON l.ModuloOrigenId = m.Id
+       LEFT JOIN TD_CAMPOS cv ON l.CampoValorId = cv.Id
+       GROUP BY l.Id, l.Nombre, l.Descripcion, l.Estado, l.TipoLista, 
+                l.ModuloOrigenId, l.CampoValorId, l.FiltroActivo, 
+                l.FiltroCampoId, l.FiltroOperador, l.FiltroValor,
+                l.FechaCreacion, l.FechaModificacion, 
+                l.UsuarioCreacion, l.UsuarioModificacion,
+                m.Nombre, cv.Nombre
        ORDER BY l.Nombre`
     );
 
@@ -78,14 +164,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body: CreateListaRequest = await request.json();
-    const { Nombre, Descripcion, Valores } = body;
+    const body: any = await request.json();
+    const { Nombre, Descripcion, Valores, TipoLista, ModuloOrigenId, CampoValorId, FiltroActivo, FiltroCampoId, FiltroOperador, FiltroValor } = body;
 
     if (!Nombre) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'Nombre es requerido' },
         { status: 400 }
       );
+    }
+
+    // Validar campos según tipo de lista
+    if (TipoLista === 'ValoresModulo') {
+      if (!ModuloOrigenId || !CampoValorId) {
+        return NextResponse.json<ApiResponse>(
+          { success: false, error: 'ModuloOrigenId y CampoValorId son requeridos para listas de módulo' },
+          { status: 400 }
+        );
+      }
     }
 
     // Verificar si la lista ya existe
@@ -103,12 +199,22 @@ export async function POST(request: NextRequest) {
 
     // Insertar lista
     const result = await execute(
-      `INSERT INTO TD_LISTAS (Nombre, Descripcion, UsuarioCreacion)
+      `INSERT INTO TD_LISTAS 
+       (Nombre, Descripcion, TipoLista, ModuloOrigenId, CampoValorId, 
+        FiltroActivo, FiltroCampoId, FiltroOperador, FiltroValor, UsuarioCreacion)
        OUTPUT INSERTED.Id
-       VALUES (@nombre, @descripcion, @usuarioCreacion)`,
+       VALUES (@nombre, @descripcion, @tipoLista, @moduloOrigenId, @campoValorId,
+               @filtroActivo, @filtroCampoId, @filtroOperador, @filtroValor, @usuarioCreacion)`,
       {
         nombre: Nombre,
         descripcion: Descripcion || null,
+        tipoLista: TipoLista || 'ValoresFijos',
+        moduloOrigenId: ModuloOrigenId || null,
+        campoValorId: CampoValorId || null,
+        filtroActivo: FiltroActivo || false,
+        filtroCampoId: FiltroCampoId || null,
+        filtroOperador: FiltroOperador || null,
+        filtroValor: FiltroValor || null,
         usuarioCreacion: user.usuario,
       }
     );
@@ -173,7 +279,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body: any = await request.json();
-    const { Nombre, Descripcion, Estado, Valores } = body;
+    const { Nombre, Descripcion, Estado, Valores, TipoLista, ModuloOrigenId, CampoValorId, FiltroActivo, FiltroCampoId, FiltroOperador, FiltroValor } = body;
 
     // Construir lista de cambios para traza
     const cambios: string[] = [];
@@ -200,6 +306,34 @@ export async function PUT(request: NextRequest) {
     if (Estado) {
       updateQuery += ', Estado = @estado';
       params.estado = Estado;
+    }
+    if (TipoLista !== undefined) {
+      updateQuery += ', TipoLista = @tipoLista';
+      params.tipoLista = TipoLista;
+    }
+    if (ModuloOrigenId !== undefined) {
+      updateQuery += ', ModuloOrigenId = @moduloOrigenId';
+      params.moduloOrigenId = ModuloOrigenId;
+    }
+    if (CampoValorId !== undefined) {
+      updateQuery += ', CampoValorId = @campoValorId';
+      params.campoValorId = CampoValorId;
+    }
+    if (FiltroActivo !== undefined) {
+      updateQuery += ', FiltroActivo = @filtroActivo';
+      params.filtroActivo = FiltroActivo;
+    }
+    if (FiltroCampoId !== undefined) {
+      updateQuery += ', FiltroCampoId = @filtroCampoId';
+      params.filtroCampoId = FiltroCampoId;
+    }
+    if (FiltroOperador !== undefined) {
+      updateQuery += ', FiltroOperador = @filtroOperador';
+      params.filtroOperador = FiltroOperador;
+    }
+    if (FiltroValor !== undefined) {
+      updateQuery += ', FiltroValor = @filtroValor';
+      params.filtroValor = FiltroValor;
     }
 
     updateQuery += ' WHERE Id = @id';

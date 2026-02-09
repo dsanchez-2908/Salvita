@@ -33,9 +33,13 @@ export async function GET(request: NextRequest) {
 
       // Obtener permisos del rol
       const permisos = await query(
-        `SELECT p.*, m.Nombre as ModuloNombre
+        `SELECT 
+           p.*,
+           m.Nombre as ModuloNombre,
+           mp.Nombre as ModuloPadreNombre
          FROM TR_ROL_MODULO_PERMISO p
          INNER JOIN TD_MODULOS m ON p.ModuloId = m.Id
+         LEFT JOIN TD_MODULOS mp ON p.ModuloPadreId = mp.Id
          WHERE p.RolId = @rolId`,
         { rolId: parseInt(id) }
       );
@@ -118,10 +122,11 @@ export async function POST(request: NextRequest) {
       for (const permiso of Permisos) {
         await execute(
           `INSERT INTO TR_ROL_MODULO_PERMISO 
-           (RolId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, PermisoVerAgrupado, UsuarioAsignacion)
-           VALUES (@rolId, @moduloId, @agregar, @modificar, @eliminar, @ver, @verAgrupado, @usuarioAsignacion)`,
+           (RolId, ModuloPadreId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, PermisoVerAgrupado, UsuarioAsignacion)
+           VALUES (@rolId, @moduloPadreId, @moduloId, @agregar, @modificar, @eliminar, @ver, @verAgrupado, @usuarioAsignacion)`,
           {
             rolId: nuevoRolId,
+            moduloPadreId: permiso.ModuloPadreId || null,
             moduloId: permiso.ModuloId,
             agregar: permiso.PermisoAgregar ? 1 : 0,
             modificar: permiso.PermisoModificar ? 1 : 0,
@@ -227,10 +232,11 @@ export async function PUT(request: NextRequest) {
       for (const permiso of Permisos) {
         await execute(
           `INSERT INTO TR_ROL_MODULO_PERMISO 
-           (RolId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, PermisoVerAgrupado, UsuarioAsignacion)
-           VALUES (@rolId, @moduloId, @agregar, @modificar, @eliminar, @ver, @verAgrupado, @usuarioAsignacion)`,
+           (RolId, ModuloPadreId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, PermisoVerAgrupado, UsuarioAsignacion)
+           VALUES (@rolId, @moduloPadreId, @moduloId, @agregar, @modificar, @eliminar, @ver, @verAgrupado, @usuarioAsignacion)`,
           {
             rolId: parseInt(id),
+            moduloPadreId: permiso.ModuloPadreId || null,
             moduloId: permiso.ModuloId,
             agregar: permiso.PermisoAgregar ? 1 : 0,
             modificar: permiso.PermisoModificar ? 1 : 0,
