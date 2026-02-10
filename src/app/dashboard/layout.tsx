@@ -19,7 +19,8 @@ import {
   File,
   Moon,
   Sun,
-  MessageCircle
+  MessageCircle,
+  MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
@@ -294,6 +295,16 @@ export default function DashboardLayout({
                         Dashboard
                       </Button>
                     </Link>
+                    <Link href="/dashboard/parametros-av">
+                      <Button
+                        variant={pathname === "/dashboard/parametros-av" ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        size="sm"
+                      >
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Parámetros AV
+                      </Button>
+                    </Link>
                   </div>
                 )}
               </div>
@@ -360,9 +371,7 @@ export default function DashboardLayout({
                   return (
                     <Link key={modulo.Id} href={moduloPath}>
                       <Button
-                        variant={
-                          pathname === moduloPath ? "secondary" : "ghost"
-                        }
+                        variant={pathname === moduloPath ? "secondary" : "ghost"}
                         className="w-full justify-start"
                       >
                         <IconComponent className="mr-2 h-4 w-4" />
