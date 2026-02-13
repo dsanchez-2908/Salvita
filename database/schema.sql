@@ -149,7 +149,7 @@ BEGIN
         [ModuloId] INT NOT NULL,
         [Nombre] VARCHAR(100) NOT NULL,
         [NombreColumna] VARCHAR(100) NOT NULL,
-        [TipoDato] VARCHAR(50) NOT NULL CHECK ([TipoDato] IN ('Texto', 'Descripcion', 'Numero', 'Fecha', 'FechaHora', 'Lista', 'Archivo')),
+        [TipoDato] VARCHAR(50) NOT NULL CHECK ([TipoDato] IN ('Texto', 'Descripcion', 'Numero', 'Decimal', 'Fecha', 'FechaHora', 'Lista', 'Archivo')),
         [Largo] INT NULL,
         [ListaId] INT NULL,
         [Orden] INT DEFAULT 0,

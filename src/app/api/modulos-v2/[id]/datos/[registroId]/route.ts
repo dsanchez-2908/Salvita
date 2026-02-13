@@ -90,6 +90,9 @@ export async function PUT(
         case 'Lista':
           request_db.input(campo.NombreColumna, sql.Int, valor ? parseInt(valor) : null);
           break;
+        case 'Decimal':
+          request_db.input(campo.NombreColumna, sql.Decimal(18, 2), valor ? parseFloat(valor) : null);
+          break;
         case 'Fecha':
           request_db.input(campo.NombreColumna, sql.Date, valor || null);
           break;

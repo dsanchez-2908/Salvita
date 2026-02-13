@@ -69,6 +69,7 @@ export default function ModuloDinamicoV2Page() {
   const [recordsPerPage, setRecordsPerPage] = useState(15);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilter[]>([]);
+  const [initialFiltersApplied, setInitialFiltersApplied] = useState(false);
   const [camposSistema] = useState<CampoSistema[]>([
     { Nombre: "FechaCreacion", TipoDato: "FechaHora", Visible: true },
     { Nombre: "UsuarioCreacion", TipoDato: "Texto", Visible: true },
@@ -117,6 +118,11 @@ export default function ModuloDinamicoV2Page() {
           initialData[campo.Nombre] = "";
         });
         setFormData(initialData);
+
+        // Cargar y aplicar configuración de vista (filtros iniciales)
+        if (data.data.modulo.MostrarEnMenu && !initialFiltersApplied) {
+          await loadAndApplyViewConfig(data.data.registros, data.data.campos);
+        }
       } else {
         toast({
           title: "Error",
@@ -173,6 +179,54 @@ export default function ModuloDinamicoV2Page() {
       case 'modificar': return permiso.permisoModificar;
       case 'eliminar': return permiso.permisoEliminar;
       default: return false;
+    }
+  };
+
+  const loadAndApplyViewConfig = async (registrosData: any[], camposData: Campo[]) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`/api/module-view-config?moduloId=${moduloId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      // Si hay error de servidor (tabla no existe, etc.), simplemente continuar sin configuración
+      if (!response.ok) {
+        console.log("Configuración de vista no disponible, usando valores por defecto");
+        return;
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.data?.FiltrosIniciales && data.data.FiltrosIniciales.length > 0) {
+        // Convertir filtros iniciales al formato de filtros avanzados
+        const filtrosConvertidos = data.data.FiltrosIniciales.map((filtro: any) => ({
+          id: `filtro-${Date.now()}-${Math.random()}`,
+          campo: filtro.campo,
+          operador: filtro.operador === "=" ? "igual" : 
+                    filtro.operador === "contiene" ? "contiene" :
+                    filtro.operador === "noContiene" ? "noContiene" :
+                    filtro.operador === ">" ? "mayor" :
+                    filtro.operador === "<" ? "menor" :
+                    filtro.operador === ">=" ? "mayorIgual" :
+                    filtro.operador === "<=" ? "menorIgual" : "igual",
+          valor: filtro.valor,
+        }));
+        
+        setAdvancedFilters(filtrosConvertidos);
+        setInitialFiltersApplied(true);
+        setShowAdvancedSearch(true);
+        
+        // IMPORTANTE: Aplicar los filtros a la grilla usando los registros y campos pasados como parámetro
+        applyFiltersWithData("", filtrosConvertidos, registrosData, camposData);
+        
+        toast({
+          title: "Filtros aplicados",
+          description: `Se aplicaron ${filtrosConvertidos.length} filtro(s) inicial(es). Puedes modificarlos o quitarlos.`,
+        });
+      }
+    } catch (error) {
+      console.log("Configuración de vista no disponible:", error);
+      // No mostrar error al usuario, solo continuar sin filtros iniciales
     }
   };
 
@@ -367,6 +421,119 @@ export default function ModuloDinamicoV2Page() {
     setSearchTerm(term);
     setCurrentPage(1);
     applyFilters(term, advancedFilters);
+  };
+
+  const applyFiltersWithData = (searchTerm: string, filters: AdvancedFilter[], registrosData: any[], camposData: Campo[]) => {
+    let filtered = [...registrosData];
+
+    // Aplicar búsqueda simple
+    if (searchTerm.trim()) {
+      filtered = filtered.filter((registro) => {
+        return camposData.some((campo) => {
+          if (!campo.VisibleEnGrilla) return false;
+          const value = registro[campo.NombreColumna];
+          if (!value) return false;
+          
+          // Buscar en listas
+          if (campo.TipoDato === "Lista" && campo.ListaId && valoresListas[campo.ListaId]) {
+            const valorObj = valoresListas[campo.ListaId].find((v: any) => v.Id === parseInt(value));
+            if (valorObj && valorObj.Valor.toLowerCase().includes(searchTerm.toLowerCase())) {
+              return true;
+            }
+          }
+          
+          return String(value).toLowerCase().includes(searchTerm.toLowerCase());
+        });
+      });
+    }
+
+    // Aplicar filtros avanzados
+    filters.forEach((filter) => {
+      if (!filter.campo || !filter.operador) return;
+
+      const campo = [...camposData, ...camposSistema].find(c => c.Nombre === filter.campo);
+      if (!campo) return;
+
+      filtered = filtered.filter((registro) => {
+        // Para campos de usuario usar NombreColumna, para campos de sistema usar Nombre
+        const campoUsuario = camposData.find(c => c.Nombre === filter.campo);
+        const value = campoUsuario ? registro[campoUsuario.NombreColumna] : registro[filter.campo];
+        
+        if (campo.TipoDato === "Fecha" || campo.TipoDato === "FechaHora") {
+          const recordDate = value ? new Date(value) : null;
+          if (!recordDate) return false;
+          
+          switch (filter.operador) {
+            case "igual":
+              if (!filter.valor) return true;
+              const targetDate = new Date(filter.valor);
+              return recordDate.toDateString() === targetDate.toDateString();
+            case "mayor":
+              if (!filter.valor) return true;
+              return recordDate > new Date(filter.valor);
+            case "menor":
+              if (!filter.valor) return true;
+              return recordDate < new Date(filter.valor);
+            case "mayorIgual":
+              if (!filter.valor) return true;
+              return recordDate >= new Date(filter.valor);
+            case "menorIgual":
+              if (!filter.valor) return true;
+              return recordDate <= new Date(filter.valor);
+            case "entre":
+              if (!filter.valor || !filter.valorHasta) return true;
+              const fromDate = new Date(filter.valor);
+              const toDate = new Date(filter.valorHasta);
+              toDate.setHours(23, 59, 59, 999);
+              return recordDate >= fromDate && recordDate <= toDate;
+            default:
+              return true;
+          }
+        } else if (campo.TipoDato === "Numero") {
+          const numValue = parseFloat(value);
+          if (isNaN(numValue)) return false;
+          
+          switch (filter.operador) {
+            case "igual":
+              return numValue === parseFloat(filter.valor);
+            case "mayor":
+              return numValue > parseFloat(filter.valor);
+            case "menor":
+              return numValue < parseFloat(filter.valor);
+            case "mayorIgual":
+              return numValue >= parseFloat(filter.valor);
+            case "menorIgual":
+              return numValue <= parseFloat(filter.valor);
+            case "entre":
+              return numValue >= parseFloat(filter.valor) && numValue <= parseFloat(filter.valorHasta);
+            default:
+              return true;
+          }
+        } else if (campo.TipoDato === "Lista") {
+          if (filter.operador === "igual") {
+            return value == filter.valor;
+          }
+          return true;
+        } else {
+          // Texto, Descripcion
+          const strValue = String(value || "").toLowerCase();
+          const filterValue = String(filter.valor || "").toLowerCase();
+          
+          switch (filter.operador) {
+            case "igual":
+              return strValue === filterValue;
+            case "contiene":
+              return strValue.includes(filterValue);
+            case "noContiene":
+              return !strValue.includes(filterValue);
+            default:
+              return true;
+          }
+        }
+      });
+    });
+    
+    setRegistrosFiltrados(filtered);
   };
 
   const applyFilters = (searchTerm: string, filters: AdvancedFilter[]) => {
@@ -629,6 +796,18 @@ export default function ModuloDinamicoV2Page() {
         return (
           <input
             type="number"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            value={value}
+            onChange={(e) => setFormData({ ...formData, [campo.Nombre]: e.target.value })}
+            required={campo.Obligatorio}
+          />
+        );
+
+      case "Decimal":
+        return (
+          <input
+            type="number"
+            step="0.01"
             className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             value={value}
             onChange={(e) => setFormData({ ...formData, [campo.Nombre]: e.target.value })}

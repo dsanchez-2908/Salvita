@@ -22,7 +22,8 @@ export async function GET(request: NextRequest) {
         NombreTabla,
         Icono,
         Estado,
-        Orden
+        Orden,
+        MostrarEnMenu
        FROM TD_MODULOS
        WHERE Estado = 'Activo'
        ORDER BY Orden, Nombre`
@@ -47,9 +48,8 @@ export async function GET(request: NextRequest) {
       hijosPorPadre[rel.ModuloPadreId].push(rel.ModuloHijoId);
     });
 
-    // Identificar módulos principales (los que aparecen como padres O los que no son hijos de nadie)
-    const todosLosHijos = new Set(relaciones.map((r: any) => r.ModuloHijoId));
-    const modulosPrincipales = modulos.filter((m: any) => !todosLosHijos.has(m.Id));
+    // Identificar módulos principales: aquellos con MostrarEnMenu=true
+    const modulosPrincipales = modulos.filter((m: any) => m.MostrarEnMenu === true || m.MostrarEnMenu === 1);
 
     // Construir estructura jerárquica
     const estructura = modulosPrincipales.map((modulo: any) => {

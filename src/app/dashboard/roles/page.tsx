@@ -67,6 +67,7 @@ export default function RolesPage() {
             Orden: padre.Orden,
             PermisoVer: false,
             PermisoVerAgrupado: false,
+            PermisoVerRelacionado: false,
             PermisoAgregar: false,
             PermisoModificar: false,
             PermisoEliminar: false,
@@ -85,6 +86,7 @@ export default function RolesPage() {
                 Orden: hijo.Orden,
                 PermisoVer: false,
                 PermisoVerAgrupado: false,
+                PermisoVerRelacionado: false,
                 PermisoAgregar: false,
                 PermisoModificar: false,
                 PermisoEliminar: false,
@@ -186,6 +188,7 @@ export default function RolesPage() {
             Orden: m.Orden,
             PermisoVer: permiso?.PermisoVer || false,
             PermisoVerAgrupado: permiso?.PermisoVerAgrupado || false,
+            PermisoVerRelacionado: permiso?.PermisoVerRelacionado || false,
             PermisoAgregar: permiso?.PermisoAgregar || false,
             PermisoModificar: permiso?.PermisoModificar || false,
             PermisoEliminar: permiso?.PermisoEliminar || false,
@@ -438,11 +441,12 @@ export default function RolesPage() {
                       <thead className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b">
                         <tr>
                           <th className="w-1/4 bg-white dark:bg-gray-950 text-left p-3 font-medium">Módulo</th>
-                          <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Ver</th>
+                          <th className="text-center w-[10%] bg-white dark:bg-gray-950 p-3 font-medium">Ver</th>
                           <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Ver Agrupado</th>
-                          <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Agregar</th>
-                          <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Modificar</th>
-                          <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Eliminar</th>
+                          <th className="text-center w-[12%] bg-white dark:bg-gray-950 p-3 font-medium">Ver Relacionado</th>
+                          <th className="text-center w-[10%] bg-white dark:bg-gray-950 p-3 font-medium">Agregar</th>
+                          <th className="text-center w-[10%] bg-white dark:bg-gray-950 p-3 font-medium">Modificar</th>
+                          <th className="text-center w-[10%] bg-white dark:bg-gray-950 p-3 font-medium">Eliminar</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -495,6 +499,21 @@ export default function RolesPage() {
                                     ) : (
                                       <span className="text-xs text-gray-400">N/A</span>
                                     )}
+                                  </td>
+                                  <td className="text-center p-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={permiso.PermisoVerRelacionado}
+                                      onChange={(e) =>
+                                        updatePermiso(
+                                          permiso.ModuloPadreId,
+                                          permiso.ModuloId,
+                                          "PermisoVerRelacionado",
+                                          e.target.checked
+                                        )
+                                      }
+                                      className="w-4 h-4"
+                                    />
                                   </td>
                                   <td className="text-center p-3">
                                     <input
@@ -572,6 +591,9 @@ export default function RolesPage() {
                                           }
                                           className="w-4 h-4"
                                         />
+                                      </td>
+                                      <td className="text-center bg-gray-100 dark:bg-gray-900 p-3">
+                                        <span className="text-xs text-gray-400">N/A</span>
                                       </td>
                                       <td className="text-center bg-gray-100 dark:bg-gray-900 p-3">
                                         <span className="text-xs text-gray-400">N/A</span>

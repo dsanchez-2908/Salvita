@@ -68,8 +68,12 @@ export interface ModuloV2 {
   UsuarioCreacion?: string;
   UsuarioModificacion?: string;
   Campos?: Campo[];
-  ModulosRelacionados?: ModuloRelacion[];
+  ModulosRelacionados?: ModuloRelacion[]; // Relaciones tipo "Hijo" - para crear registros
+  ModulosParaAsociar?: ModuloRelacion[];  // Relaciones tipo "Asociar" - para asociar registros existentes
 }
+
+// Tipo de relación entre módulos
+export type TipoRelacionModulo = 'Hijo' | 'Asociar';
 
 // Relación entre módulos
 export interface ModuloRelacion {
@@ -77,6 +81,7 @@ export interface ModuloRelacion {
   ModuloPadreId: number;
   ModuloHijoId: number;
   ModuloHijo?: ModuloV2;
+  TipoRelacion: TipoRelacionModulo; // 'Hijo' = crear registros, 'Asociar' = asociar existentes
   Orden: number;
   FechaCreacion: Date;
   UsuarioCreacion?: string;
@@ -209,7 +214,8 @@ export interface CreateModuloV2Request {
   Icono?: string;
   Orden?: number;
   Campos: CreateCampoRequest[];
-  ModulosRelacionados?: number[]; // IDs de módulos a relacionar
+  ModulosRelacionados?: number[];  // IDs de módulos relacionados tipo "Hijo" (crear registros)
+  ModulosParaAsociar?: number[];   // IDs de módulos para asociar registros existentes
 }
 
 export interface CreateCampoRequest {

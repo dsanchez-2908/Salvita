@@ -64,14 +64,14 @@ export function getUserFromRequest(request: NextRequest): JWTPayload | null {
  * Verifica si un usuario tiene un permiso específico en un módulo
  * @param userId ID del usuario
  * @param moduloId ID del módulo
- * @param permiso Tipo de permiso a verificar: 'ver', 'verAgrupado', 'agregar', 'modificar', 'eliminar'
+ * @param permiso Tipo de permiso a verificar: 'ver', 'verAgrupado', 'verRelacionado', 'agregar', 'modificar', 'eliminar'
  * @param moduloPadreId (Opcional) ID del módulo padre para verificar permisos contextuales. Si es módulo principal, usar null.
  * @returns true si tiene el permiso o es administrador, false en caso contrario
  */
 export async function verificarPermiso(
   userId: number,
   moduloId: number,
-  permiso: 'ver' | 'verAgrupado' | 'agregar' | 'modificar' | 'eliminar',
+  permiso: 'ver' | 'verAgrupado' | 'verRelacionado' | 'agregar' | 'modificar' | 'eliminar',
   moduloPadreId?: number | null
 ): Promise<boolean> {
   try {
@@ -93,6 +93,7 @@ export async function verificarPermiso(
     const columnaPermiso = {
       ver: 'PermisoVer',
       verAgrupado: 'PermisoVerAgrupado',
+      verRelacionado: 'PermisoVerRelacionado',
       agregar: 'PermisoAgregar',
       modificar: 'PermisoModificar',
       eliminar: 'PermisoEliminar'
@@ -123,13 +124,13 @@ export async function verificarPermiso(
 /**
  * Registra una traza de auditoría
  * @param userId ID del usuario que realiza la acción
- * @param accion Tipo de acción: 'Agregar', 'Modificar', 'Eliminar', 'Consultar'
+ * @param accion Tipo de acción: 'Agregar', 'Modificar', 'Eliminar', 'Consultar', 'Asociar', 'Desasociar'
  * @param proceso Nombre del proceso/pantalla: 'Roles', 'Usuarios', 'Módulos', 'Lista: Nombre', 'Módulo: Nombre'
  * @param detalle Descripción detallada de lo que se hizo
  */
 export async function registrarTraza(
   userId: number,
-  accion: 'Agregar' | 'Modificar' | 'Eliminar' | 'Consultar',
+  accion: 'Agregar' | 'Modificar' | 'Eliminar' | 'Consultar' | 'Asociar' | 'Desasociar',
   proceso: string,
   detalle: string
 ): Promise<void> {

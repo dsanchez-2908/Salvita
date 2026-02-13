@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
         mp.Nombre as ModuloPadreNombre,
         MAX(CAST(rp.PermisoVer as int)) as PermisoVer,
         MAX(CAST(rp.PermisoVerAgrupado as int)) as PermisoVerAgrupado,
+        MAX(CAST(rp.PermisoVerRelacionado as int)) as PermisoVerRelacionado,
         MAX(CAST(rp.PermisoAgregar as int)) as PermisoAgregar,
         MAX(CAST(rp.PermisoModificar as int)) as PermisoModificar,
         MAX(CAST(rp.PermisoEliminar as int)) as PermisoEliminar
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
           moduloPadreNombre: p.ModuloPadreNombre,
           permisoVer: p.PermisoVer === 1,
           permisoVerAgrupado: p.PermisoVerAgrupado === 1,
+          permisoVerRelacionado: p.PermisoVerRelacionado === 1,
           permisoAgregar: p.PermisoAgregar === 1,
           permisoModificar: p.PermisoModificar === 1,
           permisoEliminar: p.PermisoEliminar === 1,

@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     // Obtener campos del módulo
     const campos = await query(
-      `SELECT Nombre, NombreColumna, TipoDato, ListaId
+      `SELECT Nombre, NombreColumna, TipoDato, ListaId, Visible, VisibleEnGrilla
        FROM TD_CAMPOS
        WHERE ModuloId = @moduloId AND (Visible = 1 OR VisibleEnGrilla = 1)
        ORDER BY Orden`,
@@ -210,7 +210,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Obtener campos visibles en grilla
-      const camposGrilla = campos.filter((c: any) => c.Nombre !== 'Estado');
+      const camposGrilla = campos.filter((c: any) => c.VisibleEnGrilla === 1 || c.VisibleEnGrilla === true);
       
       // Construir SELECT con JOINs para campos de tipo Lista
       const selects: string[] = ['t.Id', 't.FechaCreacion'];

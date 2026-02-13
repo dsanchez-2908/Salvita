@@ -8,13 +8,13 @@ import { Label } from "@/components/ui/label";
 import { 
   Plus, Trash2, Save, X, Edit, AlertCircle, Eye, GripVertical,
   FileText, Users, Calendar, Home, Settings, List as ListIcon, 
-  Folder, File, Package, Briefcase, Heart, Star, Shield, Link as LinkIcon
+  Folder, File, Package, Briefcase, Heart, Star, Shield, Link as LinkIcon, Sliders
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
-type TipoDato = "Texto" | "Descripcion" | "Numero" | "Fecha" | "FechaHora" | "Lista" | "Archivo";
+type TipoDato = "Texto" | "Descripcion" | "Numero" | "Decimal" | "Fecha" | "FechaHora" | "Lista" | "Archivo";
 
 interface Campo {
   tempId: string;
@@ -36,13 +36,17 @@ interface ModuloV2 {
   Icono: string;
   Orden: number;
   Estado: string;
-  ModulosRelacionados?: ModuloRelacion[];
+  ModulosRelacionados?: ModuloRelacion[];  // Relaciones tipo "Hijo" - para crear registros
+  ModulosParaAsociar?: ModuloRelacion[];    // Relaciones tipo "Asociar" - para asociar registros existentes
 }
+
+type TipoRelacionModulo = 'Hijo' | 'Asociar';
 
 interface ModuloRelacion {
   Id: number;
   ModuloPadreId: number;
   ModuloHijoId: number;
+  TipoRelacion: TipoRelacionModulo;
   Orden: number;
   ModuloHijo?: {
     Id: number;
@@ -91,7 +95,8 @@ export default function ModulosV2Page() {
     MostrarEnMenu: true,
     Icono: "FileText",
     Orden: 1,
-    ModulosRelacionados: [] as number[],
+    ModulosRelacionados: [] as number[],      // Módulos hijos para crear registros
+    ModulosParaAsociar: [] as number[],       // Módulos para asociar registros existentes
   });
 
   const [campos, setCampos] = useState<Campo[]>([
@@ -176,13 +181,30 @@ export default function ModulosV2Page() {
         const data = await response.json();
         const moduloCompleto = data.data;
 
+        console.log('handleEdit - Módulo recibido:', moduloCompleto.Nombre);
+        console.log('handleEdit - ModulosRelacionados:', moduloCompleto.ModulosRelacionados);
+        console.log('handleEdit - Filtrando tipo Hijo:', 
+          moduloCompleto.ModulosRelacionados?.filter((r: ModuloRelacion) => r.TipoRelacion === 'Hijo')
+        );
+
         setFormData({
           Nombre: moduloCompleto.Nombre,
           MostrarEnMenu: moduloCompleto.MostrarEnMenu,
           Icono: moduloCompleto.Icono || "FileText",
           Orden: moduloCompleto.Orden,
-          ModulosRelacionados: moduloCompleto.ModulosRelacionados?.map((r: ModuloRelacion) => r.ModuloHijoId) || [],
+          ModulosRelacionados: moduloCompleto.ModulosRelacionados
+            ?.filter((r: ModuloRelacion) => r.TipoRelacion === 'Hijo')
+            ?.map((r: ModuloRelacion) => r.ModuloHijoId) || [],
+          ModulosParaAsociar: moduloCompleto.ModulosRelacionados
+            ?.filter((r: ModuloRelacion) => r.TipoRelacion === 'Asociar')
+            ?.map((r: ModuloRelacion) => r.ModuloHijoId) || [],
         });
+
+        console.log('handleEdit - formData.ModulosRelacionados:', 
+          moduloCompleto.ModulosRelacionados
+            ?.filter((r: ModuloRelacion) => r.TipoRelacion === 'Hijo')
+            ?.map((r: ModuloRelacion) => r.ModuloHijoId) || []
+        );
 
         const camposData = moduloCompleto.Campos?.map((campo: any) => ({
           tempId: crypto.randomUUID(),
@@ -306,6 +328,7 @@ export default function ModulosV2Page() {
         Obligatorio: campo.Obligatorio,
       })),
       ModulosRelacionados: formData.ModulosRelacionados,
+      ModulosParaAsociar: formData.ModulosParaAsociar,
     };
 
     try {
@@ -331,8 +354,10 @@ export default function ModulosV2Page() {
         resetForm();
         fetchData();
         
-        // Si el módulo se muestra en el menú, notificar al layout para actualizar
-        if (formData.MostrarEnMenu) {
+        // Actualizar el menú si:
+        // 1. El módulo se muestra en el menú principal, O
+        // 2. Hay módulos relacionados (porque podría ser un hijo de otro módulo en el menú)
+        if (formData.MostrarEnMenu || formData.ModulosRelacionados.length > 0) {
           window.dispatchEvent(new CustomEvent('modulosUpdated'));
         }
       } else {
@@ -360,6 +385,7 @@ export default function ModulosV2Page() {
       Icono: "FileText",
       Orden: modulos.length + 1,
       ModulosRelacionados: [],
+      ModulosParaAsociar: [],
     });
     setCampos([
       {
@@ -446,6 +472,15 @@ export default function ModulosV2Page() {
     }));
   };
 
+  const toggleModuloAsociacion = (moduloId: number) => {
+    setFormData(prev => ({
+      ...prev,
+      ModulosParaAsociar: prev.ModulosParaAsociar.includes(moduloId)
+        ? prev.ModulosParaAsociar.filter(id => id !== moduloId)
+        : [...prev.ModulosParaAsociar, moduloId]
+    }));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -520,6 +555,14 @@ export default function ModulosV2Page() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  onClick={() => window.location.href = `/dashboard/modulos-v2/${modulo.Id}/configurar-vista`}
+                                  title="Configurar Vista"
+                                >
+                                  <Sliders className="h-4 w-4 text-purple-500" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => handleEdit(modulo)}
                                 >
                                   <Edit className="h-4 w-4 text-blue-500" />
@@ -541,23 +584,39 @@ export default function ModulosV2Page() {
                           <div className="ml-12 space-y-2">
                             {modulo.ModulosRelacionados.map((relacion) => {
                               const HijoIconComponent = getIconComponent(relacion.ModuloHijo?.Icono || 'FileText');
+                              const esAsociacion = relacion.TipoRelacion === 'Asociar';
+                              
                               return (
                                 <Card 
                                   key={relacion.Id} 
-                                  className="hover:shadow-md transition-shadow dark:border-gray-600 border dark:bg-gray-750 border-l-4 border-l-blue-400 dark:border-l-blue-600"
+                                  className={`hover:shadow-md transition-shadow dark:border-gray-600 border dark:bg-gray-750 border-l-4 ${
+                                    esAsociacion 
+                                      ? 'border-l-green-500 dark:border-l-green-600 bg-green-50 dark:bg-green-950/20' 
+                                      : 'border-l-blue-400 dark:border-l-blue-600'
+                                  }`}
                                 >
                                   <CardContent className="pt-3 pb-3">
                                     <div className="flex items-start justify-between">
                                       <div className="flex items-center space-x-3">
-                                        <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800">
-                                          <HijoIconComponent className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                                        <div className={`p-2 rounded-lg ${
+                                          esAsociacion 
+                                            ? 'bg-green-100 dark:bg-green-900/30' 
+                                            : 'bg-gray-100 dark:bg-gray-800'
+                                        }`}>
+                                          <HijoIconComponent className={`h-4 w-4 ${
+                                            esAsociacion 
+                                              ? 'text-green-600 dark:text-green-400' 
+                                              : 'text-gray-600 dark:text-gray-400'
+                                          }`} />
                                         </div>
                                         <div>
                                           <h4 className="font-medium text-sm dark:text-white">
                                             {relacion.ModuloHijo?.Nombre}
                                           </h4>
                                           <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            Relacionado con {modulo.Nombre}
+                                            {esAsociacion 
+                                              ? `Relacionado con registros de ${modulo.Nombre}` 
+                                              : `Relacionado con ${modulo.Nombre}`}
                                           </p>
                                         </div>
                                       </div>
@@ -833,6 +892,54 @@ export default function ModulosV2Page() {
                       </p>
                     )}
                   </div>
+
+                  {/* Módulos a Relacionar sus Registros */}
+                  <div className="pt-4 border-t dark:border-gray-700">
+                    <Label className="text-sm font-medium dark:text-gray-300">
+                      Módulos a relacionar sus registros
+                    </Label>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                      Selecciona los módulos cuyos registros existentes podrán asociarse a este módulo
+                    </p>
+                    <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 dark:bg-gray-700 dark:border-gray-600">
+                      {modulosDisponibles
+                        .filter(m => !editingModuloId || m.Id !== editingModuloId)
+                        .map((modulo) => {
+                          const IconComponent = getIconComponent(modulo.Icono);
+                          const isSelected = formData.ModulosParaAsociar.includes(modulo.Id);
+                          
+                          return (
+                            <div
+                              key={modulo.Id}
+                              className={`flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 ${
+                                isSelected ? "bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700" : "border border-transparent"
+                              }`}
+                              onClick={() => toggleModuloAsociacion(modulo.Id)}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="w-4 h-4"
+                              />
+                              <IconComponent className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                              <div className="flex-1">
+                                <div className="font-medium text-sm dark:text-white">{modulo.Nombre}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                                  <LinkIcon className="w-3 h-3" />
+                                  <span>Se podrán asociar registros existentes</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                    {formData.ModulosParaAsociar.length > 0 && (
+                      <p className="text-sm text-green-600 dark:text-green-400 mt-2">
+                        {formData.ModulosParaAsociar.length} módulo(s) para asociar registros
+                      </p>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
@@ -897,6 +1004,7 @@ export default function ModulosV2Page() {
                                       <option value="Texto">Texto</option>
                                       <option value="Descripcion">Descripción</option>
                                       <option value="Numero">Número</option>
+                                      <option value="Decimal">Decimal</option>
                                       <option value="Fecha">Fecha</option>
                                       <option value="FechaHora">Fecha y Hora</option>
                                       <option value="Lista">Lista</option>

@@ -122,8 +122,8 @@ export async function POST(request: NextRequest) {
       for (const permiso of Permisos) {
         await execute(
           `INSERT INTO TR_ROL_MODULO_PERMISO 
-           (RolId, ModuloPadreId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, PermisoVerAgrupado, UsuarioAsignacion)
-           VALUES (@rolId, @moduloPadreId, @moduloId, @agregar, @modificar, @eliminar, @ver, @verAgrupado, @usuarioAsignacion)`,
+           (RolId, ModuloPadreId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, PermisoVerAgrupado, PermisoVerRelacionado, UsuarioAsignacion)
+           VALUES (@rolId, @moduloPadreId, @moduloId, @agregar, @modificar, @eliminar, @ver, @verAgrupado, @verRelacionado, @usuarioAsignacion)`,
           {
             rolId: nuevoRolId,
             moduloPadreId: permiso.ModuloPadreId || null,
@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
             eliminar: permiso.PermisoEliminar ? 1 : 0,
             ver: permiso.PermisoVer ? 1 : 0,
             verAgrupado: permiso.PermisoVerAgrupado ? 1 : 0,
+            verRelacionado: permiso.PermisoVerRelacionado ? 1 : 0,
             usuarioAsignacion: user.usuario,
           }
         );
@@ -232,8 +233,8 @@ export async function PUT(request: NextRequest) {
       for (const permiso of Permisos) {
         await execute(
           `INSERT INTO TR_ROL_MODULO_PERMISO 
-           (RolId, ModuloPadreId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, PermisoVerAgrupado, UsuarioAsignacion)
-           VALUES (@rolId, @moduloPadreId, @moduloId, @agregar, @modificar, @eliminar, @ver, @verAgrupado, @usuarioAsignacion)`,
+           (RolId, ModuloPadreId, ModuloId, PermisoAgregar, PermisoModificar, PermisoEliminar, PermisoVer, PermisoVerAgrupado, PermisoVerRelacionado, UsuarioAsignacion)
+           VALUES (@rolId, @moduloPadreId, @moduloId, @agregar, @modificar, @eliminar, @ver, @verAgrupado, @verRelacionado, @usuarioAsignacion)`,
           {
             rolId: parseInt(id),
             moduloPadreId: permiso.ModuloPadreId || null,
@@ -243,6 +244,7 @@ export async function PUT(request: NextRequest) {
             eliminar: permiso.PermisoEliminar ? 1 : 0,
             ver: permiso.PermisoVer ? 1 : 0,
             verAgrupado: permiso.PermisoVerAgrupado ? 1 : 0,
+            verRelacionado: permiso.PermisoVerRelacionado ? 1 : 0,
             usuarioAsignacion: user.usuario,
           }
         );

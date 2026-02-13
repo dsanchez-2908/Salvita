@@ -35,6 +35,11 @@ interface ModuloSecundario extends Modulo {
   Campos: Campo[];
 }
 
+interface ModuloAsociacion extends Modulo {
+  Campos: Campo[];
+  TipoRelacion: 'Asociar';
+}
+
 export default function DetalleRegistroV2Page() {
   const params = useParams();
   const router = useRouter();
@@ -47,11 +52,21 @@ export default function DetalleRegistroV2Page() {
   const [registro, setRegistro] = useState<any>(null);
   const [campos, setCampos] = useState<Campo[]>([]);
   const [modulosSecundarios, setModulosSecundarios] = useState<ModuloSecundario[]>([]);
+  const [modulosParaAsociar, setModulosParaAsociar] = useState<ModuloAsociacion[]>([]); // Nuevo: módulos para asociar registros
   const [registrosSecundarios, setRegistrosSecundarios] = useState<Record<number, any[]>>({});
+  const [registrosAsociados, setRegistrosAsociados] = useState<Record<number, any[]>>({}); // Nuevo: registros asociados
   const [registrosSecundariosFiltrados, setRegistrosSecundariosFiltrados] = useState<Record<number, any[]>>({});
+  const [registrosAsociadosFiltrados, setRegistrosAsociadosFiltrados] = useState<Record<number, any[]>>({}); // Nuevo
   const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
+  const [searchTermsAsociados, setSearchTermsAsociados] = useState<Record<number, string>>({}); // Nuevo
   const [valoresListas, setValoresListas] = useState<Record<number, any[]>>({});
   const [loading, setLoading] = useState(true);
+  
+  // Modal de asociación
+  const [showAsociarModal, setShowAsociarModal] = useState<number | null>(null);
+  const [busquedaAsociar, setBusquedaAsociar] = useState('');
+  const [registrosDisponibles, setRegistrosDisponibles] = useState<any[]>([]);
+  const [loadingDisponibles, setLoadingDisponibles] = useState(false);
   
   // Estado para controlar módulos secundarios expandidos/colapsados
   const [expandedModulos, setExpandedModulos] = useState<Record<number, boolean>>({});
@@ -71,9 +86,19 @@ export default function DetalleRegistroV2Page() {
   // Estado para visualización de detalle
   const [viewingSecundario, setViewingSecundario] = useState<{ moduloId: number; registro: any } | null>(null);
   
+  // Estado para relaciones inversas (donde este registro está asociado)
+  const [showRelacionesInversas, setShowRelacionesInversas] = useState(false);
+  const [relacionesInversas, setRelacionesInversas] = useState<any[]>([]);
+  const [loadingRelacionesInversas, setLoadingRelacionesInversas] = useState(false);
+  
   // Estado para permisos del usuario
   const [permisos, setPermisos] = useState<any>(null);
   const [esAdmin, setEsAdmin] = useState(false);
+  
+  // Estado para configuración de vista
+  const [tituloPersonalizado, setTituloPersonalizado] = useState<string | null>(null);
+  const [numeroColumnas, setNumeroColumnas] = useState(2);
+
   useEffect(() => {
     loadData();
   }, [moduloId, registroId]);
@@ -84,7 +109,7 @@ export default function DetalleRegistroV2Page() {
       const token = localStorage.getItem("token");
 
       // Cargar permisos del usuario
-      await loadPermisos();
+      const { permisos: permisosUsuario, esAdmin: esAdminUsuario } = await loadPermisos();
 
       // Cargar módulo con sus campos - ENDPOINT V2
       const moduloResponse = await fetch(`/api/modulos-v2?id=${moduloId}`, {
@@ -95,8 +120,15 @@ export default function DetalleRegistroV2Page() {
       if (moduloData.success) {
         setModulo(moduloData.data);
         setCampos(moduloData.data.Campos || []);
+        
+        // La API ya filtró los módulos según permisos del usuario
+        // No necesitamos filtrar nuevamente aquí
         setModulosSecundarios(moduloData.data.ModulosSecundarios || []);
+        setModulosParaAsociar(moduloData.data.ModulosParaAsociar || []);
       }
+
+      // Variable para el registro actual
+      let registroActual = null;
 
       // Cargar datos del registro principal - ENDPOINT V2
       const datosResponse = await fetch(`/api/modulos-v2/${moduloId}/datos`, {
@@ -105,8 +137,8 @@ export default function DetalleRegistroV2Page() {
       const datosData = await datosResponse.json();
       
       if (datosData.success) {
-        const reg = datosData.data.registros.find((r: any) => r.Id === parseInt(registroId));
-        setRegistro(reg);
+        registroActual = datosData.data.registros.find((r: any) => r.Id === parseInt(registroId));
+        setRegistro(registroActual);
       }
 
       // Cargar valores de listas para el módulo principal
@@ -132,6 +164,28 @@ export default function DetalleRegistroV2Page() {
             await loadValoresListas([...new Set(listasSecIds)]);
           }
         }
+      }
+
+      // Cargar registros asociados de módulos para asociar
+      if (moduloData.data.ModulosParaAsociar && moduloData.data.ModulosParaAsociar.length > 0) {
+        for (const modAsoc of moduloData.data.ModulosParaAsociar) {
+          await loadRegistrosAsociados(modAsoc.Id);
+          
+          // Cargar valores de listas para módulo asociado
+          const listasAsocIds = (modAsoc.Campos || [])
+            .filter((c: Campo) => c.TipoDato === "Lista" && c.ListaId)
+            .map((c: Campo) => c.ListaId);
+          
+          if (listasAsocIds.length > 0) {
+            await loadValoresListas([...new Set(listasAsocIds)]);
+          }
+        }
+      }
+
+      // IMPORTANTE: Cargar configuración de vista AL FINAL, después de tener todos los datos
+      // Esto asegura que los valores de listas estén disponibles para generar el título
+      if (moduloData.data.MostrarEnMenu && registroActual) {
+        await loadViewConfig(registroActual, moduloData.data.Campos || []);
       }
     } catch (error) {
       console.error("Error cargando datos:", error);
@@ -177,13 +231,92 @@ export default function DetalleRegistroV2Page() {
       if (data.success) {
         setPermisos(data.data.permisos);
         setEsAdmin(data.data.esAdmin);
+        return { permisos: data.data.permisos, esAdmin: data.data.esAdmin };
       }
+      return { permisos: null, esAdmin: false };
     } catch (error) {
       console.error("Error cargando permisos:", error);
+      return { permisos: null, esAdmin: false };
     }
   };
 
-  const tienePermiso = (moduloId: number, tipoPermiso: 'ver' | 'agregar' | 'modificar' | 'eliminar' | 'verAgrupado', moduloPadreId?: number): boolean => {
+  const loadViewConfig = async (registroActual: any, camposData: Campo[]) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`/api/module-view-config?moduloId=${moduloId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      // Si hay error de servidor (tabla no existe, etc.), simplemente usar valores por defecto
+      if (!response.ok) {
+        console.log("Configuración de vista no disponible, usando valores por defecto");
+        return;
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Aplicar número de columnas
+        if (data.data.NumeroColumnas) {
+          setNumeroColumnas(data.data.NumeroColumnas);
+        }
+        
+        // Generar título personalizado usando los campos pasados como parámetro
+        if (data.data.ConfigTitulo && data.data.ConfigTitulo.campos.length > 0 && registroActual) {
+          const titulo = generarTituloPersonalizadoConCampos(
+            data.data.ConfigTitulo.campos,
+            data.data.ConfigTitulo.separador || " ",
+            registroActual,
+            camposData
+          );
+          
+          setTituloPersonalizado(titulo);
+        }
+      }
+    } catch (error) {
+      console.log("Configuración de vista no disponible:", error);
+      // No mostrar error al usuario, usar valores por defecto
+    }
+  };
+
+  const generarTituloPersonalizado = (camposTitulo: string[], separador: string, registroData: any): string => {
+    return generarTituloPersonalizadoConCampos(camposTitulo, separador, registroData, campos);
+  };
+
+  const generarTituloPersonalizadoConCampos = (camposTitulo: string[], separador: string, registroData: any, camposData: Campo[]): string => {
+    const valores = camposTitulo.map(nombreCampo => {
+      const campo = camposData.find(c => c.Nombre === nombreCampo);
+      if (!campo) {
+        return "";
+      }
+      
+      const valor = registroData[campo.NombreColumna];
+      if (!valor) {
+        return "";
+      }
+      
+      // Formatear según el tipo de dato
+      switch (campo.TipoDato) {
+        case "Fecha":
+          return new Date(valor).toLocaleDateString("es-AR");
+        case "FechaHora":
+          return new Date(valor).toLocaleString("es-AR");
+        case "Lista":
+          if (campo.ListaId && valoresListas[campo.ListaId]) {
+            const valorNumerico = typeof valor === 'string' ? parseInt(valor) : valor;
+            const valorObj = valoresListas[campo.ListaId].find((v: any) => v.Id === valorNumerico);
+            return valorObj ? valorObj.Valor : valor;
+          }
+          return valor;
+        default:
+          return valor;
+      }
+    }).filter(v => v); // Filtrar valores vacíos
+    
+    return valores.join(separador);
+  };
+
+  const tienePermiso = (moduloId: number, tipoPermiso: 'ver' | 'agregar' | 'modificar' | 'eliminar' | 'verAgrupado' | 'verRelacionado', moduloPadreId?: number): boolean => {
     // Administradores tienen todos los permisos
     if (esAdmin) return true;
     
@@ -203,7 +336,39 @@ export default function DetalleRegistroV2Page() {
       case 'modificar': return permiso.permisoModificar;
       case 'eliminar': return permiso.permisoEliminar;
       case 'verAgrupado': return permiso.permisoVerAgrupado;
+      case 'verRelacionado': return permiso.permisoVerRelacionado;
       default: return false;
+    }
+  };
+
+  const loadRelacionesInversas = async () => {
+    try {
+      setLoadingRelacionesInversas(true);
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `/api/modulos-v2/${moduloId}/datos/${registroId}/relaciones-inversas`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await response.json();
+      
+      if (data.success) {
+        setRelacionesInversas(data.data || []);
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Error al cargar relaciones",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error cargando relaciones inversas:", error);
+      toast({
+        title: "Error",
+        description: "Error al cargar relaciones",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingRelacionesInversas(false);
     }
   };
 
@@ -230,6 +395,190 @@ export default function DetalleRegistroV2Page() {
       console.error("Error cargando registros secundarios:", error);
     }
   };
+
+  // ============================================
+  // FUNCIONES PARA ASOCIACIÓN DE REGISTROS
+  // ============================================
+
+  const loadRegistrosAsociados = async (moduloAsocId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `/api/modulos-v2/${moduloId}/datos/${registroId}/asociaciones?moduloAsociadoId=${moduloAsocId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await response.json();
+      
+      if (data.success) {
+        setRegistrosAsociados(prev => ({
+          ...prev,
+          [moduloAsocId]: data.data.registros,
+        }));
+        setRegistrosAsociadosFiltrados(prev => ({
+          ...prev,
+          [moduloAsocId]: data.data.registros,
+        }));
+      }
+    } catch (error) {
+      console.error("Error cargando registros asociados:", error);
+    }
+  };
+
+  const loadRegistrosDisponibles = async (moduloAsocId: number, busqueda: string) => {
+    try {
+      setLoadingDisponibles(true);
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `/api/modulos-v2/${moduloAsocId}/datos/disponibles?busqueda=${encodeURIComponent(busqueda)}&registroPadreId=${registroId}&moduloPadreId=${moduloId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await response.json();
+      
+      if (data.success) {
+        setRegistrosDisponibles(data.data.registros);
+      }
+    } catch (error) {
+      console.error("Error cargando registros disponibles:", error);
+      toast({
+        title: "Error",
+        description: "Error al buscar registros",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingDisponibles(false);
+    }
+  };
+
+  const handleAsociarRegistro = async (moduloAsocId: number, registroAsociadoId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `/api/modulos-v2/${moduloId}/datos/${registroId}/asociaciones`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            moduloAsociadoId: moduloAsocId,
+            registroAsociadoId,
+          }),
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: "Éxito",
+          description: "Registro asociado correctamente",
+        });
+        // Recargar registros asociados
+        await loadRegistrosAsociados(moduloAsocId);
+        // Cerrar modal y recargar disponibles
+        setShowAsociarModal(null);
+        setBusquedaAsociar('');
+        setRegistrosDisponibles([]);
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Error al asociar registro",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error asociando registro:", error);
+      toast({
+        title: "Error",
+        description: "Error al asociar registro",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDesasociarRegistro = async (moduloAsocId: number, relacionId: number) => {
+    const confirmed = await confirm({
+      title: "¿Desasociar registro?",
+      description: "Esta acción eliminará la asociación entre estos registros.",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `/api/modulos-v2/${moduloId}/datos/${registroId}/asociaciones?relacionId=${relacionId}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: "Éxito",
+          description: "Registro desasociado correctamente",
+        });
+        // Recargar registros asociados
+        await loadRegistrosAsociados(moduloAsocId);
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Error al desasociar registro",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error desasociando registro:", error);
+      toast({
+        title: "Error",
+        description: "Error al desasociar registro",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSearchAsociados = (moduloAsocId: number, term: string, campos: Campo[], registros: any[]) => {
+    setSearchTermsAsociados(prev => ({ ...prev, [moduloAsocId]: term }));
+    
+    if (!term.trim()) {
+      setRegistrosAsociadosFiltrados(prev => ({
+        ...prev,
+        [moduloAsocId]: registros,
+      }));
+      return;
+    }
+
+    const filtered = registros.filter((registro) => {
+      return campos.some((campo) => {
+        if (!campo.VisibleEnGrilla) return false;
+        const value = registro[campo.Nombre];
+        if (!value) return false;
+        
+        // Buscar en listas
+        if (campo.TipoDato === "Lista" && campo.ListaId && valoresListas[campo.ListaId]) {
+          const valorObj = valoresListas[campo.ListaId].find((v: any) => v.Id === parseInt(value));
+          if (valorObj && valorObj.Valor.toLowerCase().includes(term.toLowerCase())) {
+            return true;
+          }
+        }
+        
+        return value.toString().toLowerCase().includes(term.toLowerCase());
+      });
+    });
+
+    setRegistrosAsociadosFiltrados(prev => ({
+      ...prev,
+      [moduloAsocId]: filtered,
+    }));
+  };
+
+  // ============================================
+  // FIN FUNCIONES ASOCIACIÓN
+  // ============================================
 
   const handleSearchSecundario = (moduloSecId: number, term: string, campos: Campo[], registros: any[]) => {
     setSearchTerms(prev => ({ ...prev, [moduloSecId]: term }));
@@ -534,6 +883,18 @@ export default function DetalleRegistroV2Page() {
           />
         );
 
+      case "Decimal":
+        return (
+          <input
+            type="number"
+            step="0.01"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            value={value}
+            onChange={(e) => onChange(campo.Nombre, e.target.value)}
+            required={campo.Obligatorio}
+          />
+        );
+
       case "Fecha":
         return (
           <input
@@ -689,15 +1050,17 @@ export default function DetalleRegistroV2Page() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push(`/dashboard/modulos-v2/${moduloId}`)}
+            onClick={() => router.back()}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              {campos.find(c => c.VisibleEnGrilla)?.NombreColumna 
-                ? registro[campos.find(c => c.VisibleEnGrilla)!.NombreColumna]
-                : `Registro #${registroId}`}
+              {tituloPersonalizado || (
+                campos.find(c => c.VisibleEnGrilla)?.NombreColumna 
+                  ? registro[campos.find(c => c.VisibleEnGrilla)!.NombreColumna]
+                  : `Registro #${registroId}`
+              )}
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mt-1">Detalle de {modulo.Nombre.toLowerCase()}</p>
             {registro && (
@@ -716,15 +1079,29 @@ export default function DetalleRegistroV2Page() {
             )}
           </div>
         </div>
-        {modulosSecundarios.length > 0 && tienePermiso(parseInt(moduloId), 'verAgrupado') && (
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/dashboard/modulos-v2/${moduloId}/${registroId}/agrupado`)}
-          >
-            <Layers className="mr-2 h-4 w-4" />
-            Vista Agrupada
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {modulosSecundarios.length > 0 && tienePermiso(parseInt(moduloId), 'verAgrupado') && (
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/dashboard/modulos-v2/${moduloId}/${registroId}/agrupado`)}
+            >
+              <Layers className="mr-2 h-4 w-4" />
+              Vista Agrupada
+            </Button>
+          )}
+          {tienePermiso(parseInt(moduloId), 'verRelacionado') && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                loadRelacionesInversas();
+                setShowRelacionesInversas(true);
+              }}
+            >
+              <Layers className="mr-2 h-4 w-4" />
+              Ver Relaciones
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Información del registro principal */}
@@ -733,7 +1110,12 @@ export default function DetalleRegistroV2Page() {
           <CardTitle className="dark:text-white">Información General</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={`grid gap-4 ${
+            numeroColumnas === 1 ? "grid-cols-1" :
+            numeroColumnas === 2 ? "grid-cols-1 md:grid-cols-2" :
+            numeroColumnas === 3 ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" :
+            "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          }`}>
             {campos.map((campo) => (
               <div key={campo.Id}>
                 <Label className="text-gray-600 dark:text-gray-400">{campo.Nombre}</Label>
@@ -1048,6 +1430,272 @@ export default function DetalleRegistroV2Page() {
         );
       })}
 
+      {/* Módulos para Asociar Registros */}
+      {modulosParaAsociar && modulosParaAsociar.length > 0 && modulosParaAsociar.map((moduloAsoc) => {
+        const registros = registrosAsociados[moduloAsoc.Id] || [];
+        const registrosFiltrados = registrosAsociadosFiltrados[moduloAsoc.Id] || registros;
+        const searchTerm = searchTermsAsociados[moduloAsoc.Id] || "";
+        const camposVisiblesGrilla = (moduloAsoc.Campos || []).filter((c) => c.VisibleEnGrilla);
+        const isExpanded = expandedModulos[moduloAsoc.Id] || false;
+        
+        return (
+          <Card key={moduloAsoc.Id} className="dark:bg-gray-800 dark:border-gray-700 border-l-4 border-l-green-500">
+            <CardHeader 
+              className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+              onClick={() => setExpandedModulos(prev => ({ ...prev, [moduloAsoc.Id]: !isExpanded }))}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ChevronDown 
+                    className={`h-5 w-5 transition-transform text-green-600 dark:text-green-400 ${isExpanded ? 'rotate-180' : ''}`}
+                  />
+                  <CardTitle className="dark:text-white flex items-center gap-2">
+                    {moduloAsoc.Nombre}
+                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded">
+                      Asociación de registros
+                    </span>
+                  </CardTitle>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    ({registros.length})
+                  </span>
+                </div>
+                {isExpanded && tienePermiso(moduloAsoc.Id, 'agregar', parseInt(moduloId)) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-green-500 text-green-600 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/20"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowAsociarModal(moduloAsoc.Id);
+                      setBusquedaAsociar('');
+                      setRegistrosDisponibles([]);
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Asociar Registro
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            {isExpanded && (
+            <CardContent>
+              {/* Barra de búsqueda */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+                  <Input
+                    type="text"
+                    placeholder={`Buscar en ${moduloAsoc.Nombre.toLowerCase()}...`}
+                    value={searchTerm}
+                    onChange={(e) => handleSearchAsociados(moduloAsoc.Id, e.target.value, moduloAsoc.Campos, registros)}
+                    className="pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                  />
+                </div>
+                {searchTerm && (
+                  <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    {registrosFiltrados.length} resultado{registrosFiltrados.length !== 1 ? 's' : ''} encontrado{registrosFiltrados.length !== 1 ? 's' : ''}
+                  </div>
+                )}
+              </div>
+
+              {/* Tabla de registros asociados */}
+              {registrosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <p>No hay registros asociados</p>
+                  {tienePermiso(moduloAsoc.Id, 'agregar', parseInt(moduloId)) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4 border-green-500 text-green-600 hover:bg-green-50 dark:border-green-600 dark:text-green-400"
+                      onClick={() => {
+                        setShowAsociarModal(moduloAsoc.Id);
+                        setBusquedaAsociar('');
+                        setRegistrosDisponibles([]);
+                      }}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Asociar primer registro
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="border rounded-lg overflow-hidden dark:border-gray-700">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-100 dark:bg-gray-800">
+                        <tr>
+                          {camposVisiblesGrilla.map((campo) => (
+                            <th
+                              key={campo.Id}
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+                            >
+                              {campo.Nombre}
+                            </th>
+                          ))}
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                            Acciones
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {registrosFiltrados.map((registro, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            {camposVisiblesGrilla.map((campo) => (
+                              <td key={campo.Id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                {renderCellValue(campo, registro[campo.NombreColumna])}
+                              </td>
+                            ))}
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => router.push(`/dashboard/modulos-v2/${moduloAsoc.Id}/${registro.Id}`)}
+                                  title="Ver detalle"
+                                >
+                                  <Eye className="h-4 w-4 text-blue-500" />
+                                </Button>
+                                {tienePermiso(moduloAsoc.Id, 'eliminar', parseInt(moduloId)) && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDesasociarRegistro(moduloAsoc.Id, registro.RelacionId)}
+                                    title="Quitar asociación"
+                                  >
+                                    <X className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+            )}
+          </Card>
+        );
+      })}
+
+      {/* Modal de asociación de registros */}
+      {showAsociarModal !== null && (() => {
+        const moduloAsoc = modulosParaAsociar.find(m => m.Id === showAsociarModal);
+        if (!moduloAsoc) return null;
+
+        const camposVisiblesGrilla = (moduloAsoc.Campos || []).filter((c) => c.VisibleEnGrilla);
+
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b dark:border-gray-700">
+                <div>
+                  <h2 className="text-xl font-bold dark:text-white">Asociar {moduloAsoc.Nombre}</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Busca y selecciona un registro para asociar
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setShowAsociarModal(null);
+                    setBusquedaAsociar('');
+                    setRegistrosDisponibles([]);
+                  }}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {/* Búsqueda */}
+                <div className="mb-4">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+                      <Input
+                        type="text"
+                        placeholder={`Buscar ${moduloAsoc.Nombre.toLowerCase()}...`}
+                        value={busquedaAsociar}
+                        onChange={(e) => setBusquedaAsociar(e.target.value)}
+                        className="pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <Button
+                      onClick={() => loadRegistrosDisponibles(moduloAsoc.Id, busquedaAsociar)}
+                      disabled={loadingDisponibles}
+                    >
+                      {loadingDisponibles ? 'Buscando...' : 'Buscar'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Resultados */}
+                {registrosDisponibles.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                    <Search className="mx-auto h-12 w-12 mb-4 text-gray-300 dark:text-gray-600" />
+                    <p>Utiliza el buscador para encontrar registros</p>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden dark:border-gray-700">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-100 dark:bg-gray-800">
+                          <tr>
+                            {camposVisiblesGrilla.map((campo) => (
+                              <th
+                                key={campo.Id}
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+                              >
+                                {campo.Nombre}
+                              </th>
+                            ))}
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                              Acción
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          {registrosDisponibles.map((registro) => (
+                            <tr key={registro.Id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                              {camposVisiblesGrilla.map((campo) => (
+                                <td key={campo.Id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                  {renderCellValue(campo, registro[campo.NombreColumna])}
+                                </td>
+                              ))}
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-green-500 text-green-600 hover:bg-green-50 dark:border-green-600 dark:text-green-400"
+                                  onClick={() => handleAsociarRegistro(moduloAsoc.Id, registro.Id)}
+                                >
+                                  Asociar
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {registrosDisponibles.length > 0 && (
+                      <div className="bg-gray-100 dark:bg-gray-800 px-6 py-3 text-sm text-gray-700 dark:text-gray-300">
+                        {registrosDisponibles.length} registro{registrosDisponibles.length !== 1 ? 's' : ''} disponible{registrosDisponibles.length !== 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Modal de visualización de detalle */}
       {viewingSecundario && (() => {
         const moduloSec = modulosSecundarios.find(m => m.Id === viewingSecundario.moduloId);
@@ -1124,6 +1772,132 @@ export default function DetalleRegistroV2Page() {
           </div>
         );
       })()}
+
+      {/* Modal de Relaciones Inversas */}
+      {showRelacionesInversas && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 border-b dark:border-gray-700">
+              <h2 className="text-2xl font-bold dark:text-white">Relaciones del Registro</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowRelacionesInversas(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingRelacionesInversas ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-lg dark:text-white">Cargando relaciones...</div>
+                </div>
+              ) : relacionesInversas.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="text-center">
+                    <p className="text-lg text-gray-600 dark:text-gray-400 mb-2">
+                      No hay relaciones registradas
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-500">
+                      Este registro no está asociado a ningún módulo
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {relacionesInversas.map((relacion: any) => (
+                    <Card key={relacion.moduloId} className="dark:bg-gray-900 dark:border-gray-700">
+                      <CardHeader>
+                        <CardTitle className="text-lg dark:text-white flex items-center gap-2">
+                          <div className="w-1 h-6 bg-purple-500 rounded"></div>
+                          {relacion.moduloNombre}
+                          <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                            ({relacion.registros.length} registro{relacion.registros.length !== 1 ? 's' : ''})
+                          </span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {relacion.registros.length > 0 ? (
+                          <div className="border rounded-lg overflow-hidden dark:border-gray-700">
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-100 dark:bg-gray-800">
+                                  <tr>
+                                    {relacion.campos.map((campo: Campo) => (
+                                      <th
+                                        key={campo.Id}
+                                        className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+                                      >
+                                        {campo.Nombre}
+                                      </th>
+                                    ))}
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                      Fecha Asociación
+                                    </th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                      Acción
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                  {relacion.registros.map((registro: any) => (
+                                    <tr key={registro.Id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                      {relacion.campos.map((campo: Campo) => (
+                                        <td key={campo.Id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                          {renderCellValue(campo, registro[campo.NombreColumna])}
+                                        </td>
+                                      ))}
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                                        {registro.FechaAsociacion 
+                                          ? new Date(registro.FechaAsociacion).toLocaleString('es-AR')
+                                          : '-'}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setShowRelacionesInversas(false);
+                                            router.push(`/dashboard/modulos-v2/${relacion.moduloId}/${registro.Id}`);
+                                          }}
+                                        >
+                                          <Eye className="h-4 w-4 mr-1" />
+                                          Ver Detalle
+                                        </Button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                            No hay registros asociados de este módulo
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-2 p-6 border-t dark:border-gray-700">
+              <Button
+                variant="outline"
+                onClick={() => setShowRelacionesInversas(false)}
+              >
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

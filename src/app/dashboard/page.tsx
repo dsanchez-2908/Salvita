@@ -212,6 +212,9 @@ export default function DashboardPage() {
   const renderWidgetDetalleFiltrado = (widget: WidgetData) => {
     const { config, registros, campos, nombreValorFiltro } = widget;
     
+    // Filtrar solo campos visibles en grilla
+    const camposVisibles = campos ? campos.filter((c: any) => c.VisibleEnGrilla) : [];
+    
     return (
       <Card key={config.Id} className="col-span-full">
         <CardHeader>
@@ -229,7 +232,7 @@ export default function DashboardPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-100 dark:bg-gray-800">
                   <tr>
-                    {campos && campos.slice(0, 5).map((campo: any) => (
+                    {camposVisibles.map((campo: any) => (
                       <th key={campo.Nombre} className="p-2 text-left">
                         {campo.Nombre}
                       </th>
@@ -239,7 +242,7 @@ export default function DashboardPage() {
                 <tbody>
                   {registros.slice(0, 5).map((registro, index) => (
                     <tr key={index} className="border-b dark:border-gray-700">
-                      {campos && campos.slice(0, 5).map((campo: any) => {
+                      {camposVisibles.map((campo: any) => {
                         const valor = registro[campo.Nombre];
                         
                         // Renderizar según tipo de dato

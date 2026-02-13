@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
           r.Id,
           r.ModuloPadreId,
           r.ModuloHijoId,
+          r.TipoRelacion,
           r.Orden,
           r.FechaCreacion,
           r.UsuarioCreacion,
@@ -63,16 +64,27 @@ export async function GET(request: NextRequest) {
         FROM TR_MODULO_RELACION r
         INNER JOIN TD_MODULOS m ON r.ModuloHijoId = m.Id
         WHERE r.ModuloPadreId = @moduloId
-        ORDER BY r.Orden, m.Nombre`,
+        ORDER BY r.TipoRelacion, r.Orden, m.Nombre`,
         { moduloId: parseInt(id) }
       );
 
+      console.log(`GET /api/modulos-v2?id=${id} - Relaciones encontradas:`, relacionesQuery.length);
+      if (relacionesQuery.length > 0) {
+        console.log('GET - Relaciones detalle:', relacionesQuery.map((r: any) => ({
+          ModuloHijoId: r.ModuloHijoId,
+          ModuloHijoNombre: r.ModuloHijoNombre,
+          TipoRelacion: r.TipoRelacion,
+        })));
+      }
+
       // Cargar módulos relacionados con estructura completa
       const modulosRelacionados = [];
-      const modulosSecundarios = [];
+      const modulosSecundarios = []; // Solo tipo "Hijo"
+      const modulosParaAsociar = []; // Solo tipo "Asociar"
       
       for (const rel of relacionesQuery) {
-        // Verificar si el usuario tiene permiso de ver este módulo hijo en contexto del padre
+        // Verificar si el usuario tiene permiso de ver este módulo hijo
+        // Para módulos secundarios/asociados, SOLO buscar permisos específicos del contexto padre-hijo
         const permisoVer = await query(
           `SELECT MAX(CAST(rp.PermisoVer as int)) as TienePermiso
            FROM TR_USUARIO_ROL ur
@@ -88,8 +100,11 @@ export async function GET(request: NextRequest) {
           }
         );
 
+        console.log(`GET - Verificando permiso para ModuloHijoId=${rel.ModuloHijoId}, TienePermiso:`, permisoVer[0]?.TienePermiso);
+
         // Si no tiene permiso, saltar este módulo hijo
         if (!permisoVer[0]?.TienePermiso || permisoVer[0].TienePermiso === 0) {
+          console.log(`GET - Usuario sin permiso para ver ModuloHijoId=${rel.ModuloHijoId}, saltando...`);
           continue;
         }
 
@@ -110,6 +125,7 @@ export async function GET(request: NextRequest) {
           Icono: rel.ModuloHijoIcono,
           Estado: rel.ModuloHijoEstado,
           Campos: camposSecundario,
+          TipoRelacion: rel.TipoRelacion,
         };
 
         // Estructura para la página de configuración
@@ -117,15 +133,28 @@ export async function GET(request: NextRequest) {
           Id: rel.Id,
           ModuloPadreId: rel.ModuloPadreId,
           ModuloHijoId: rel.ModuloHijoId,
+          TipoRelacion: rel.TipoRelacion,
           Orden: rel.Orden,
           FechaCreacion: rel.FechaCreacion,
           UsuarioCreacion: rel.UsuarioCreacion,
           ModuloHijo: moduloHijoCompleto,
         });
 
-        // Estructura simplificada para la página de detalle
-        modulosSecundarios.push(moduloHijoCompleto);
+        // Separar según tipo de relación
+        if (rel.TipoRelacion === 'Asociar') {
+          modulosParaAsociar.push(moduloHijoCompleto);
+        } else {
+          // Por defecto, tipo "Hijo" o cualquier otro
+          modulosSecundarios.push(moduloHijoCompleto);
+        }
       }
+
+      console.log(`GET - ModulosRelacionados final (${modulosRelacionados.length}):`, 
+        modulosRelacionados.map((r: any) => ({
+          ModuloHijoId: r.ModuloHijoId,
+          TipoRelacion: r.TipoRelacion,
+        }))
+      );
 
       return NextResponse.json<ApiResponse>({
         success: true,
@@ -133,7 +162,8 @@ export async function GET(request: NextRequest) {
           ...modulo,
           Campos: campos,
           ModulosRelacionados: modulosRelacionados,
-          ModulosSecundarios: modulosSecundarios,
+          ModulosSecundarios: modulosSecundarios, // Solo tipo "Hijo"
+          ModulosParaAsociar: modulosParaAsociar, // Solo tipo "Asociar"
         },
       });
     }
@@ -158,6 +188,56 @@ export async function GET(request: NextRequest) {
          ORDER BY m.Orden, m.Nombre`,
         { userId: user.userId }
       );
+
+      // Cargar módulos relacionados (hijos) para cada módulo del menú
+      for (let i = 0; i < modulos.length; i++) {
+        const relacionesQuery = await query(
+          `SELECT 
+            r.Id,
+            r.ModuloPadreId,
+            r.ModuloHijoId,
+            r.TipoRelacion,
+            r.Orden,
+            m.Nombre AS ModuloHijoNombre,
+            m.NombreTabla AS ModuloHijoNombreTabla,
+            m.MostrarEnMenu AS ModuloHijoMostrarEnMenu,
+            m.Icono AS ModuloHijoIcono,
+            m.Estado AS ModuloHijoEstado
+          FROM TR_MODULO_RELACION r
+          INNER JOIN TD_MODULOS m ON r.ModuloHijoId = m.Id
+          WHERE r.ModuloPadreId = @moduloPadreId
+            AND EXISTS (
+              SELECT 1 FROM TR_ROL_MODULO_PERMISO rp2
+              INNER JOIN TR_USUARIO_ROL ur2 ON rp2.RolId = ur2.RolId
+              INNER JOIN TD_ROLES r2 ON ur2.RolId = r2.Id
+              WHERE ur2.UsuarioId = @userId
+                AND r2.Estado = 'Activo'
+                AND rp2.ModuloId = m.Id
+                AND rp2.ModuloPadreId = @moduloPadreId
+                AND rp2.PermisoVer = 1
+            )
+          ORDER BY r.TipoRelacion, r.Orden, m.Nombre`,
+          { moduloPadreId: modulos[i].Id, userId: user.userId }
+        );
+
+        const modulosRelacionados = relacionesQuery.map((rel: any) => ({
+          Id: rel.Id,
+          ModuloPadreId: rel.ModuloPadreId,
+          ModuloHijoId: rel.ModuloHijoId,
+          TipoRelacion: rel.TipoRelacion,
+          Orden: rel.Orden,
+          ModuloHijo: {
+            Id: rel.ModuloHijoId,
+            Nombre: rel.ModuloHijoNombre,
+            NombreTabla: rel.ModuloHijoNombreTabla,
+            MostrarEnMenu: rel.ModuloHijoMostrarEnMenu,
+            Icono: rel.ModuloHijoIcono,
+            Estado: rel.ModuloHijoEstado,
+          }
+        }));
+
+        modulos[i].ModulosRelacionados = modulosRelacionados;
+      }
     } else {
       // Sin filtro de permisos (para administración de módulos)
       modulos = await query(
@@ -197,7 +277,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: CreateModuloV2Request = await request.json();
-    const { Nombre, MostrarEnMenu, Icono, Orden, Campos, ModulosRelacionados } = body;
+    const { Nombre, MostrarEnMenu, Icono, Orden, Campos, ModulosRelacionados, ModulosParaAsociar } = body;
 
     // Validaciones
     if (!Nombre || Campos.length === 0) {
@@ -269,6 +349,9 @@ export async function POST(request: NextRequest) {
           case 'Numero':
             tipoDato = 'INT';
             break;
+          case 'Decimal':
+            tipoDato = 'DECIMAL(18,2)';
+            break;
           case 'Fecha':
             tipoDato = 'DATE';
             break;
@@ -324,20 +407,63 @@ export async function POST(request: NextRequest) {
           `);
       }
 
-      // 4. Crear relaciones con otros módulos
+      // 4. Crear relaciones con otros módulos (tipo "Hijo")
       if (ModulosRelacionados && ModulosRelacionados.length > 0) {
         for (let i = 0; i < ModulosRelacionados.length; i++) {
           await transaction.request()
             .input('moduloPadreId', sql.Int, moduloId)
             .input('moduloHijoId', sql.Int, ModulosRelacionados[i])
+            .input('tipoRelacion', sql.VarChar, 'Hijo')
             .input('orden', sql.Int, i)
             .input('usuarioCreacion', sql.VarChar, user.usuario)
             .query(`
               INSERT INTO TR_MODULO_RELACION 
-              (ModuloPadreId, ModuloHijoId, Orden, UsuarioCreacion)
-              VALUES (@moduloPadreId, @moduloHijoId, @orden, @usuarioCreacion)
+              (ModuloPadreId, ModuloHijoId, TipoRelacion, Orden, UsuarioCreacion)
+              VALUES (@moduloPadreId, @moduloHijoId, @tipoRelacion, @orden, @usuarioCreacion)
             `);
         }
+      }
+
+      // 4b. Crear relaciones para asociar registros (tipo "Asociar")
+      if (ModulosParaAsociar && ModulosParaAsociar.length > 0) {
+        for (let i = 0; i < ModulosParaAsociar.length; i++) {
+          await transaction.request()
+            .input('moduloPadreId', sql.Int, moduloId)
+            .input('moduloHijoId', sql.Int, ModulosParaAsociar[i])
+            .input('tipoRelacion', sql.VarChar, 'Asociar')
+            .input('orden', sql.Int, i)
+            .input('usuarioCreacion', sql.VarChar, user.usuario)
+            .query(`
+              INSERT INTO TR_MODULO_RELACION 
+              (ModuloPadreId, ModuloHijoId, TipoRelacion, Orden, UsuarioCreacion)
+              VALUES (@moduloPadreId, @moduloHijoId, @tipoRelacion, @orden, @usuarioCreacion)
+            `);
+        }
+      }
+
+      // 5. Asignar permisos completos al rol Administrador
+      console.log('POST - Buscando rol Administrador...');
+      const adminRole = await transaction.request().query(`
+        SELECT Id FROM TD_ROLES WHERE Nombre = 'Administrador' AND Estado = 'Activo'
+      `);
+
+      if (adminRole.recordset.length > 0) {
+        const adminRoleId = adminRole.recordset[0].Id;
+        console.log(`POST - Asignando permisos a rol Administrador (ID: ${adminRoleId}) para módulo ${moduloId}...`);
+        
+        await transaction.request()
+          .input('rolId', sql.Int, adminRoleId)
+          .input('moduloId', sql.Int, moduloId)
+          .input('usuarioAsignacion', sql.VarChar, user.usuario)
+          .query(`
+            INSERT INTO TR_ROL_MODULO_PERMISO 
+            (RolId, ModuloId, ModuloPadreId, PermisoVer, PermisoVerAgrupado, PermisoAgregar, PermisoModificar, PermisoEliminar, UsuarioAsignacion)
+            VALUES (@rolId, @moduloId, NULL, 1, 1, 1, 1, 1, @usuarioAsignacion)
+          `);
+        
+        console.log('POST - Permisos de Administrador asignados exitosamente');
+      } else {
+        console.log('POST - ⚠️ Rol Administrador no encontrado o inactivo');
       }
 
       await transaction.commit();
@@ -346,7 +472,7 @@ export async function POST(request: NextRequest) {
         user.userId,
         'Agregar',
         'Gestión de Módulos',
-        `Módulo creado: "${Nombre}" (ID: ${moduloId}, Tabla: ${NombreTabla}, MostrarEnMenu: ${MostrarEnMenu ? 'Sí' : 'No'}, Módulos relacionados: ${ModulosRelacionados?.length || 0})`
+        `Módulo creado: "${Nombre}" (ID: ${moduloId}, Tabla: ${NombreTabla}, MostrarEnMenu: ${MostrarEnMenu ? 'Sí' : 'No'}, Módulos relacionados: ${ModulosRelacionados?.length || 0}, Módulos para asociar: ${ModulosParaAsociar?.length || 0})`
       );
 
       return NextResponse.json<ApiResponse>({
@@ -391,7 +517,15 @@ export async function PUT(request: NextRequest) {
     }
 
     const body: Partial<CreateModuloV2Request> & { Nombre?: string; Activo?: boolean } = await request.json();
-    const { Nombre, MostrarEnMenu, Icono, Orden, Campos, ModulosRelacionados, Activo } = body;
+    const { Nombre, MostrarEnMenu, Icono, Orden, Campos, ModulosRelacionados, ModulosParaAsociar, Activo } = body;
+
+    console.log('PUT /api/modulos-v2 - Body recibido:', {
+      Nombre,
+      ModulosRelacionados,
+      ModulosParaAsociar,
+      ModulosRelacionadosType: typeof ModulosRelacionados,
+      ModulosParaAsociarType: typeof ModulosParaAsociar,
+    });
 
     // Verificar que exista el módulo
     const existingModulo = await query(
@@ -479,6 +613,9 @@ export async function PUT(request: NextRequest) {
               case 'Numero':
                 tipoDato = 'INT';
                 break;
+              case 'Decimal':
+                tipoDato = 'DECIMAL(18,2)';
+                break;
               case 'Fecha':
                 tipoDato = 'DATE';
                 break;
@@ -522,39 +659,99 @@ export async function PUT(request: NextRequest) {
                 (@moduloId, @nombre, @nombreColumna, @tipoDato, @largo, @listaId, @orden, 
                  @visible, @visibleEnGrilla, @obligatorio, @usuarioCreacion)
               `);
+          } else {
+            // Campo existente - actualizar propiedades en TD_CAMPOS
+            await transaction.request()
+              .input('campoId', sql.Int, existingCampo.recordset[0].Id)
+              .input('orden', sql.Int, campo.Orden || 0)
+              .input('visible', sql.Bit, campo.Visible !== false)
+              .input('visibleEnGrilla', sql.Bit, campo.VisibleEnGrilla !== false)
+              .input('obligatorio', sql.Bit, campo.Obligatorio || false)
+              .input('listaId', sql.Int, campo.ListaId)
+              .query(`
+                UPDATE TD_CAMPOS 
+                SET Orden = @orden,
+                    Visible = @visible,
+                    VisibleEnGrilla = @visibleEnGrilla,
+                    Obligatorio = @obligatorio,
+                    ListaId = @listaId
+                WHERE Id = @campoId
+              `);
           }
         }
       }
 
       // 3. Actualizar relaciones
+      console.log('PUT - Antes de actualizar relaciones:', {
+        ModulosRelacionados,
+        ModulosRelacionadosIsUndefined: ModulosRelacionados === undefined,
+        ModulosRelacionadosLength: ModulosRelacionados?.length,
+        ModulosParaAsociar,
+        ModulosParaAsociarIsUndefined: ModulosParaAsociar === undefined,
+        ModulosParaAsociarLength: ModulosParaAsociar?.length,
+      });
+
       if (ModulosRelacionados !== undefined) {
-        // Eliminar relaciones existentes
+        console.log('PUT - Eliminando relaciones tipo Hijo existentes...');
+        // Eliminar relaciones existentes tipo "Hijo"
         await transaction.request()
           .input('moduloPadreId', sql.Int, parseInt(id))
-          .query('DELETE FROM TR_MODULO_RELACION WHERE ModuloPadreId = @moduloPadreId');
+          .input('tipoRelacion', sql.VarChar, 'Hijo')
+          .query('DELETE FROM TR_MODULO_RELACION WHERE ModuloPadreId = @moduloPadreId AND TipoRelacion = @tipoRelacion');
 
-        // Crear nuevas relaciones
+        console.log(`PUT - Insertando ${ModulosRelacionados.length} relaciones tipo Hijo...`);
+        // Crear nuevas relaciones tipo "Hijo"
         for (let i = 0; i < ModulosRelacionados.length; i++) {
+          console.log(`PUT - Insertando relación Hijo: ModuloPadreId=${id}, ModuloHijoId=${ModulosRelacionados[i]}, Orden=${i}`);
           await transaction.request()
             .input('moduloPadreId', sql.Int, parseInt(id))
             .input('moduloHijoId', sql.Int, ModulosRelacionados[i])
+            .input('tipoRelacion', sql.VarChar, 'Hijo')
             .input('orden', sql.Int, i)
             .input('usuarioCreacion', sql.VarChar, user.usuario)
             .query(`
               INSERT INTO TR_MODULO_RELACION 
-              (ModuloPadreId, ModuloHijoId, Orden, UsuarioCreacion)
-              VALUES (@moduloPadreId, @moduloHijoId, @orden, @usuarioCreacion)
+              (ModuloPadreId, ModuloHijoId, TipoRelacion, Orden, UsuarioCreacion)
+              VALUES (@moduloPadreId, @moduloHijoId, @tipoRelacion, @orden, @usuarioCreacion)
+            `);
+          console.log(`PUT - Relación Hijo insertada exitosamente`);
+        }
+        console.log('PUT - Relaciones tipo Hijo actualizadas');
+      }
+
+      // 3b. Actualizar relaciones para asociar registros
+      if (ModulosParaAsociar !== undefined) {
+        // Eliminar relaciones existentes tipo "Asociar"
+        await transaction.request()
+          .input('moduloPadreId', sql.Int, parseInt(id))
+          .input('tipoRelacion', sql.VarChar, 'Asociar')
+          .query('DELETE FROM TR_MODULO_RELACION WHERE ModuloPadreId = @moduloPadreId AND TipoRelacion = @tipoRelacion');
+
+        // Crear nuevas relaciones tipo "Asociar"
+        for (let i = 0; i < ModulosParaAsociar.length; i++) {
+          await transaction.request()
+            .input('moduloPadreId', sql.Int, parseInt(id))
+            .input('moduloHijoId', sql.Int, ModulosParaAsociar[i])
+            .input('tipoRelacion', sql.VarChar, 'Asociar')
+            .input('orden', sql.Int, i)
+            .input('usuarioCreacion', sql.VarChar, user.usuario)
+            .query(`
+              INSERT INTO TR_MODULO_RELACION 
+              (ModuloPadreId, ModuloHijoId, TipoRelacion, Orden, UsuarioCreacion)
+              VALUES (@moduloPadreId, @moduloHijoId, @tipoRelacion, @orden, @usuarioCreacion)
             `);
         }
       }
 
+      console.log('PUT - Haciendo commit de la transacción...');
       await transaction.commit();
+      console.log('PUT - Commit exitoso');
 
       await registrarTraza(
         user.userId,
         'Modificar',
         'Gestión de Módulos',
-        `Módulo modificado: "${Nombre || existingModulo[0].Nombre}" (ID: ${id}, MostrarEnMenu: ${MostrarEnMenu !== undefined ? (MostrarEnMenu ? 'Sí' : 'No') : 'Sin cambios'}, Módulos relacionados: ${ModulosRelacionados?.length || 'Sin cambios'})`
+        `Módulo modificado: "${Nombre || existingModulo[0].Nombre}" (ID: ${id}, MostrarEnMenu: ${MostrarEnMenu !== undefined ? (MostrarEnMenu ? 'Sí' : 'No') : 'Sin cambios'}, Módulos relacionados: ${ModulosRelacionados?.length || 'Sin cambios'}, Módulos para asociar: ${ModulosParaAsociar?.length || 'Sin cambios'})`
       );
 
       return NextResponse.json<ApiResponse>({
@@ -634,17 +831,43 @@ export async function DELETE(request: NextRequest) {
           WHERE ModuloPadreId = @id OR ModuloHijoId = @id
         `);
 
-      // 3. Eliminar campos del módulo
+      // 3. Limpiar referencias en TD_LISTAS que apuntan a los campos de este módulo
+      // Opción 1: Eliminar listas que fueron creadas desde este módulo
+      await transaction.request()
+        .input('id', sql.Int, parseInt(id))
+        .query(`
+          DELETE FROM TD_VALORES_LISTA
+          WHERE ListaId IN (SELECT Id FROM TD_LISTAS WHERE ModuloOrigenId = @id)
+        `);
+      
+      await transaction.request()
+        .input('id', sql.Int, parseInt(id))
+        .query(`
+          DELETE FROM TD_LISTAS 
+          WHERE ModuloOrigenId = @id
+        `);
+      
+      // Opción 2: Limpiar referencias en listas que apuntan a campos de este módulo
+      await transaction.request()
+        .input('id', sql.Int, parseInt(id))
+        .query(`
+          UPDATE TD_LISTAS 
+          SET CampoValorId = NULL, FiltroCampoId = NULL
+          WHERE CampoValorId IN (SELECT Id FROM TD_CAMPOS WHERE ModuloId = @id)
+             OR FiltroCampoId IN (SELECT Id FROM TD_CAMPOS WHERE ModuloId = @id)
+        `);
+
+      // 4. Eliminar campos del módulo
       await transaction.request()
         .input('id', sql.Int, parseInt(id))
         .query('DELETE FROM TD_CAMPOS WHERE ModuloId = @id');
 
-      // 4. Eliminar tabla dinámica
+      // 5. Eliminar tabla dinámica
       await transaction.request().query(`
         DROP TABLE IF EXISTS [dbo].[${modulo.NombreTabla}]
       `);
       
-      // 5. Eliminar módulo
+      // 6. Eliminar módulo
       await transaction.request()
         .input('id', sql.Int, parseInt(id))
         .query('DELETE FROM TD_MODULOS WHERE Id = @id');
