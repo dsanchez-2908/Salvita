@@ -35,7 +35,7 @@
 #n8n-chat header {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
   border-bottom: none !important;
-  padding: 1rem !important;
+  padding: 0.5rem 1rem !important;
 }
 
 /* Input del chat */

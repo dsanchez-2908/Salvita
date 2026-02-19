@@ -433,7 +433,7 @@ export default function DashboardLayout({
               className="fixed inset-0 bg-black bg-opacity-50 z-40"
               onClick={() => setShowChatbot(false)}
             />
-            <div className="fixed bottom-4 right-4 w-96 h-[600px] bg-white dark:bg-gray-800 rounded-lg shadow-2xl z-50 flex flex-col">
+            <div className="fixed bottom-4 right-4 w-[500px] h-[650px] bg-white dark:bg-gray-800 rounded-lg shadow-2xl z-50 flex flex-col">
               <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-2">
                   <MessageCircle className="h-5 w-5 text-blue-600" />

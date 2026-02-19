@@ -29,7 +29,7 @@ export default function Chatbot({ webhookUrl }: ChatbotProps) {
         i18n: {
           en: {
             title: 'Asistente Salvita',
-            subtitle: 'Pregunta lo que necesites',
+            subtitle: '',
             footer: '',
             getStarted: 'Comenzar conversación',
             inputPlaceholder: 'Escribe tu mensaje...',
