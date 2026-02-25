@@ -20,12 +20,16 @@ import {
   Moon,
   Sun,
   MessageCircle,
-  MessageSquare
+  MessageSquare,
+  ClipboardList,
+  Inbox,
+  BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
 import { useTheme } from "@/hooks/useTheme";
+import { BotonCrearTarea } from "@/components/BotonCrearTarea";
 import dynamic from 'next/dynamic';
 
 const Chatbot = dynamic(() => import('@/components/Chatbot'), { ssr: false });
@@ -49,7 +53,10 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [configOpen, setConfigOpen] = useState(false);
   const [consultasOpen, setConsultasOpen] = useState(false);
+  const [tareasOpen, setTareasOpen] = useState(false);
+  const [bandejasOpen, setBandejasOpen] = useState(false);
   const [tieneAccesoTrazas, setTieneAccesoTrazas] = useState(false);
+  const [bandejas, setBandejas] = useState<any[]>([]);
   const [chatbotUrl, setChatbotUrl] = useState("");
   const [showChatbot, setShowChatbot] = useState(false);
   const router = useRouter();
@@ -69,6 +76,7 @@ export default function DashboardLayout({
     loadProjectInfo();
     loadModulos(token);
     verificarAccesoTrazas(token);
+    loadBandejas(token);
 
     // Escuchar evento de actualización de módulos
     const handleModulosUpdate = () => {
@@ -157,6 +165,27 @@ export default function DashboardLayout({
     }
   };
 
+  const loadBandejas = async (token: string) => {
+    try {
+      const response = await fetch("/api/bandejas", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        // Filtrar bandejas activas para el usuario actual
+        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        const bandejasUsuario = data.data.filter((b: any) => {
+          // TODO: Implementar lógica de filtrado por usuario/rol
+          return b.Estado === "Activa";
+        });
+        setBandejas(bandejasUsuario);
+      }
+    } catch (error) {
+      console.error("Error cargando bandejas:", error);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -188,7 +217,8 @@ export default function DashboardLayout({
               )}
               <h1 className="text-xl font-bold text-primary">{projectName}</h1>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-3">
+              <BotonCrearTarea />
               <span className="text-sm text-gray-600 dark:text-gray-300">{user.Nombre}</span>
               <Button variant="ghost" size="icon" onClick={handleLogout}>
                 <LogOut className="h-5 w-5" />
@@ -345,9 +375,118 @@ export default function DashboardLayout({
               </div>
             )}
 
+            {/* Separador */}
+            <div className="my-4 border-t border-gray-200 dark:border-gray-700"></div>
+
+            {/* Menú de Tareas - Solo Administradores */}
+            {isAdmin && (
+              <div>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between"
+                  onClick={() => setTareasOpen(!tareasOpen)}
+                >
+                  <div className="flex items-center">
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                    Tareas
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      tareasOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </Button>
+                {tareasOpen && (
+                  <div className="ml-4 mt-2 space-y-2">
+                    <Link href="/dashboard/plantillas-tareas">
+                      <Button
+                        variant={pathname === "/dashboard/plantillas-tareas" ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        size="sm"
+                      >
+                        <ClipboardList className="mr-2 h-4 w-4" />
+                        Administración de Tareas
+                      </Button>
+                    </Link>
+                    <Link href="/dashboard/bandejas">
+                      <Button
+                        variant={pathname === "/dashboard/bandejas" ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        size="sm"
+                      >
+                        <Inbox className="mr-2 h-4 w-4" />
+                        Administración de Bandejas
+                      </Button>
+                    </Link>
+                    <Link href="/dashboard/monitor-tareas">
+                      <Button
+                        variant={pathname === "/dashboard/monitor-tareas" ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        size="sm"
+                      >
+                        <BarChart3 className="mr-2 h-4 w-4" />
+                        Monitor de Tareas
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Menú de Bandejas */}
+            <div>
+              <Button
+                variant="ghost"
+                className="w-full justify-between"
+                onClick={() => setBandejasOpen(!bandejasOpen)}
+              >
+                <div className="flex items-center">
+                  <Inbox className="mr-2 h-4 w-4" />
+                  Mis Bandejas
+                </div>
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${
+                    bandejasOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </Button>
+              {bandejasOpen && (
+                <div className="ml-4 mt-2 space-y-2">
+                  {/* Bandeja Personal - Siempre visible */}
+                  <Link href="/dashboard/bandeja-personal">
+                    <Button
+                      variant={pathname === "/dashboard/bandeja-personal" ? "secondary" : "ghost"}
+                      className="w-full justify-start"
+                      size="sm"
+                    >
+                      <Inbox className="mr-2 h-4 w-4" />
+                      📥 Bandeja Personal
+                    </Button>
+                  </Link>
+                  
+                  {/* Bandejas Grupales del usuario */}
+                  {bandejas.map((bandeja) => (
+                    <Link key={bandeja.Id} href={`/dashboard/bandeja/${bandeja.Id}`}>
+                      <Button
+                        variant={pathname === `/dashboard/bandeja/${bandeja.Id}` ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        size="sm"
+                      >
+                        <Inbox className="mr-2 h-4 w-4" />
+                        📦 {bandeja.Nombre}
+                      </Button>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Separador */}
+            <div className="my-4 border-t border-gray-200 dark:border-gray-700"></div>
+
             {/* Módulos Dinámicos */}
             {modulos.length > 0 && (
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div>
                 <h3 className="px-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                   Módulos
                 </h3>

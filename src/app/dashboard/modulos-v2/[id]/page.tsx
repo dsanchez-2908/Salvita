@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
-import { Plus, Edit, Trash2, X, Eye, Search, ChevronLeft, ChevronRight, FileText, ArrowUpDown, ArrowUp, ArrowDown, Filter, FilterX } from "lucide-react";
+import { Plus, Edit, Trash2, X, Eye, Search, ChevronLeft, ChevronRight, FileText, ArrowUpDown, ArrowUp, ArrowDown, Filter, FilterX, CheckSquare, Square } from "lucide-react";
 import { Label } from "@/components/ui/label";
 
 interface AdvancedFilter {
@@ -79,9 +79,19 @@ export default function ModuloDinamicoV2Page() {
   const [permisos, setPermisos] = useState<any>(null);
   const [esAdmin, setEsAdmin] = useState(false);
 
+  // Estado para selección de registros para tareas
+  const [registrosSeleccionados, setRegistrosSeleccionados] = useState<number[]>([]);
+  const [todosSeleccionados, setTodosSeleccionados] = useState(false);
+
   useEffect(() => {
     loadData();
   }, [moduloId]);
+
+  // Limpiar selección cuando cambia el filtrado
+  useEffect(() => {
+    setRegistrosSeleccionados([]);
+    setTodosSeleccionados(false);
+  }, [registrosFiltrados]);
 
   const loadData = async () => {
     try {
@@ -415,6 +425,81 @@ export default function ModuloDinamicoV2Page() {
     setFormData(initialData);
     setArchivos({});
     setEditingId(null);
+  };
+
+  // Funciones para manejo de selección de registros
+  const toggleSeleccionRegistro = (registroId: number) => {
+    setRegistrosSeleccionados((prev) =>
+      prev.includes(registroId)
+        ? prev.filter((id) => id !== registroId)
+        : [...prev, registroId]
+    );
+  };
+
+  const toggleSeleccionTodos = () => {
+    if (todosSeleccionados) {
+      setRegistrosSeleccionados([]);
+      setTodosSeleccionados(false);
+    } else {
+      const idsActuales = currentRecords.map((r) => r.Id);
+      setRegistrosSeleccionados(idsActuales);
+      setTodosSeleccionados(true);
+    }
+  };
+
+  const agregarParaTarea = async () => {
+    if (registrosSeleccionados.length === 0) {
+      toast({
+        title: "Aviso",
+        description: "Selecciona al menos un registro",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/tareas/temporal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ModuloId: parseInt(moduloId),
+          RegistroIds: registrosSeleccionados,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: "Éxito",
+          description: data.message || "Registros agregados para tarea",
+        });
+        
+        // Limpiar selección
+        setRegistrosSeleccionados([]);
+        setTodosSeleccionados(false);
+
+        // Disparar evento personalizado para actualizar contador
+        window.dispatchEvent(new CustomEvent("registrosTemporalesActualizados"));
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Error al agregar registros",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      toast({
+        title: "Error",
+        description: "Error al agregar registros para tarea",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSearch = (term: string) => {
@@ -1275,6 +1360,21 @@ export default function ModuloDinamicoV2Page() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
+                {/* Columna de selección */}
+                <th className="px-4 py-3 text-center">
+                  <button
+                    onClick={toggleSeleccionTodos}
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                    type="button"
+                    title={todosSeleccionados ? "Deseleccionar todos" : "Seleccionar todos"}
+                  >
+                    {todosSeleccionados ? (
+                      <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    ) : (
+                      <Square className="h-5 w-5 text-gray-400" />
+                    )}
+                  </button>
+                </th>
                 {camposVisiblesGrilla.map((campo) => (
                   <th
                     key={campo.Id}
@@ -1315,6 +1415,20 @@ export default function ModuloDinamicoV2Page() {
               ) : (
                 currentRecords.map((registro) => (
                   <tr key={registro.Id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    {/* Columna de selección */}
+                    <td className="px-4 py-4 text-center">
+                      <button
+                        onClick={() => toggleSeleccionRegistro(registro.Id)}
+                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                        type="button"
+                      >
+                        {registrosSeleccionados.includes(registro.Id) ? (
+                          <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        ) : (
+                          <Square className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </td>
                     {camposVisiblesGrilla.map((campo) => (
                       <td key={campo.Id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                         {renderCellValue(campo, registro)}
@@ -1358,6 +1472,24 @@ export default function ModuloDinamicoV2Page() {
             </tbody>
           </table>
         </div>
+        
+        {/* Botón Agregar para Tarea */}
+        {registrosSeleccionados.length > 0 && (
+          <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-800">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-blue-700 dark:text-blue-300">
+                <span className="font-semibold">{registrosSeleccionados.length}</span> registro{registrosSeleccionados.length !== 1 ? "s" : ""} seleccionado{registrosSeleccionados.length !== 1 ? "s" : ""}
+              </span>
+              <Button
+                onClick={agregarParaTarea}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar para Tarea
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Paginación */}
