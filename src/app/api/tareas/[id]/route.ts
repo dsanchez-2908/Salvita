@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, execute } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
+import { verificarPermisoTarea } from "@/lib/tareas-permissions";
 
 interface ApiResponse {
   success: boolean;
@@ -30,6 +31,7 @@ export async function GET(
       `
       SELECT 
         t.*,
+        t.Id as TareaId,
         pt.Nombre as PlantillaNombre,
         pt.Indicaciones as Instrucciones,
         uAsignado.Nombre as UsuarioAsignadoNombre,
@@ -147,6 +149,12 @@ export async function GET(
 }
 
 async function verificarAccesoTarea(userId: number, tarea: any): Promise<boolean> {
+  // Si tiene permiso de consultar tareas, puede ver cualquier tarea
+  const puedeConsultar = await verificarPermisoTarea(userId, 'consultar');
+  if (puedeConsultar) {
+    return true;
+  }
+
   // Si es asignación directa al usuario
   if (tarea.TipoAsignacion === "Usuario" && tarea.UsuarioAsignadoId === userId) {
     return true;

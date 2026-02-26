@@ -15,10 +15,14 @@ export async function GET(request: NextRequest) {
 
     // Obtener bandejas del usuario (directas o por rol)
     const result = await query(
-      `SELECT DISTINCT b.Id as BandejaId, b.Nombre as NombreBandeja
+      `SELECT DISTINCT 
+         b.Id as BandejaId,
+         b.Nombre as NombreBandeja,
+         b.Descripcion as DescripcionBandeja,
+         b.Estado as EstadoBandeja
        FROM VW_BANDEJAS_POR_USUARIO vw
        INNER JOIN TD_BANDEJAS b ON vw.BandejaId = b.Id
-       WHERE vw.UsuarioId = @userId AND b.Activo = 1
+       WHERE vw.UsuarioId = @userId AND b.Estado = 'Activa'
        ORDER BY b.Nombre`,
       { userId: user.userId }
     );

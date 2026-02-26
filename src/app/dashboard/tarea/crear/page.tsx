@@ -233,7 +233,7 @@ export default function CrearTareaPage() {
   const cargarUsuarios = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/api/usuarios", {
+      const response = await fetch("/api/usuarios?soloHabilitadosParaTareas=true", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -673,18 +673,11 @@ export default function CrearTareaPage() {
             Cancelar
           </Button>
           <Button
-            variant="outline"
             onClick={() => crearTarea(false)}
             disabled={creando}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             Crear Tarea
-          </Button>
-          <Button
-            onClick={() => crearTarea(true)}
-            disabled={creando}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            Crear e Iniciar
           </Button>
         </div>
       </div>

@@ -44,9 +44,19 @@ export async function GET(request: NextRequest) {
         { rolId: parseInt(id) }
       );
 
+      // Obtener permisos de tareas
+      const permisosTareas = await query(
+        `SELECT * FROM TR_ROL_TAREAS_PERMISO WHERE RolId = @rolId`,
+        { rolId: parseInt(id) }
+      );
+
       return NextResponse.json<ApiResponse>({
         success: true,
-        data: { ...rol[0], Permisos: permisos },
+        data: { 
+          ...rol[0], 
+          Permisos: permisos,
+          PermisosTareas: permisosTareas.length > 0 ? permisosTareas[0] : null
+        },
       });
     }
 
@@ -80,7 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: CreateRolRequest = await request.json();
-    const { Nombre, Descripcion, Permisos, AccesoTrazas } = body;
+    const { Nombre, Descripcion, Permisos, AccesoTrazas, PermisosTareas } = body;
 
     if (!Nombre) {
       return NextResponse.json<ApiResponse>(
@@ -140,6 +150,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Asignar permisos de tareas
+    if (PermisosTareas) {
+      await execute(
+        `INSERT INTO TR_ROL_TAREAS_PERMISO 
+         (RolId, HabilitarTareas, PuedeCrearTareas, PuedeAdministracionTareas, AdministracionBandejas, PuedeConsultarTareas, PuedeVerMonitorTareas, UsuarioCreacion)
+         VALUES (@rolId, @habilitar, @crear, @admin, @bandejas, @consultar, @monitor, @usuario)`,
+        {
+          rolId: nuevoRolId,
+          habilitar: PermisosTareas.HabilitarTareas ? 1 : 0,
+          crear: PermisosTareas.PuedeCrearTareas ? 1 : 0,
+          admin: PermisosTareas.PuedeAdministracionTareas ? 1 : 0,
+          bandejas: PermisosTareas.AdministracionBandejas ? 1 : 0,
+          consultar: PermisosTareas.PuedeConsultarTareas ? 1 : 0,
+          monitor: PermisosTareas.PuedeVerMonitorTareas ? 1 : 0,
+          usuario: user.usuario,
+        }
+      );
+    } else {
+      // Si no se proporcionan permisos de tareas, crear con todo deshabilitado
+      await execute(
+        `INSERT INTO TR_ROL_TAREAS_PERMISO 
+         (RolId, HabilitarTareas, PuedeCrearTareas, PuedeAdministracionTareas, AdministracionBandejas, PuedeConsultarTareas, PuedeVerMonitorTareas, UsuarioCreacion)
+         VALUES (@rolId, 0, 0, 0, 0, 0, 0, @usuario)`,
+        {
+          rolId: nuevoRolId,
+          usuario: user.usuario,
+        }
+      );
+    }
+
     // Registrar traza
     await registrarTraza(
       user.userId,
@@ -184,7 +224,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body: any = await request.json();
-    const { Nombre, Descripcion, Estado, Permisos, AccesoTrazas } = body;
+    const { Nombre, Descripcion, Estado, Permisos, AccesoTrazas, PermisosTareas } = body;
 
     // Construir lista de cambios para traza
     const cambios: string[] = [];
@@ -246,6 +286,55 @@ export async function PUT(request: NextRequest) {
             verAgrupado: permiso.PermisoVerAgrupado ? 1 : 0,
             verRelacionado: permiso.PermisoVerRelacionado ? 1 : 0,
             usuarioAsignacion: user.usuario,
+          }
+        );
+      }
+    }
+
+    // Actualizar permisos de tareas
+    if (PermisosTareas !== undefined) {
+      // Verificar si ya existen permisos de tareas para este rol
+      const existentes = await query(
+        'SELECT Id FROM TR_ROL_TAREAS_PERMISO WHERE RolId = @rolId',
+        { rolId: parseInt(id) }
+      );
+
+      if (existentes.length > 0) {
+        // Actualizar permisos existentes
+        await execute(
+          `UPDATE TR_ROL_TAREAS_PERMISO 
+           SET HabilitarTareas = @habilitar,
+               PuedeCrearTareas = @crear,
+               PuedeAdministracionTareas = @admin,
+               AdministracionBandejas = @bandejas,
+               PuedeConsultarTareas = @consultar,
+               PuedeVerMonitorTareas = @monitor
+           WHERE RolId = @rolId`,
+          {
+            rolId: parseInt(id),
+            habilitar: PermisosTareas.HabilitarTareas ? 1 : 0,
+            crear: PermisosTareas.PuedeCrearTareas ? 1 : 0,
+            admin: PermisosTareas.PuedeAdministracionTareas ? 1 : 0,
+            bandejas: PermisosTareas.AdministracionBandejas ? 1 : 0,
+            consultar: PermisosTareas.PuedeConsultarTareas ? 1 : 0,
+            monitor: PermisosTareas.PuedeVerMonitorTareas ? 1 : 0,
+          }
+        );
+      } else {
+        // Insertar nuevos permisos
+        await execute(
+          `INSERT INTO TR_ROL_TAREAS_PERMISO 
+           (RolId, HabilitarTareas, PuedeCrearTareas, PuedeAdministracionTareas, AdministracionBandejas, PuedeConsultarTareas, PuedeVerMonitorTareas, UsuarioCreacion)
+           VALUES (@rolId, @habilitar, @crear, @admin, @bandejas, @consultar, @monitor, @usuario)`,
+          {
+            rolId: parseInt(id),
+            habilitar: PermisosTareas.HabilitarTareas ? 1 : 0,
+            crear: PermisosTareas.PuedeCrearTareas ? 1 : 0,
+            admin: PermisosTareas.PuedeAdministracionTareas ? 1 : 0,
+            bandejas: PermisosTareas.AdministracionBandejas ? 1 : 0,
+            consultar: PermisosTareas.PuedeConsultarTareas ? 1 : 0,
+            monitor: PermisosTareas.PuedeVerMonitorTareas ? 1 : 0,
+            usuario: user.usuario,
           }
         );
       }

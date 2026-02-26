@@ -24,6 +24,14 @@ export default function RolesPage() {
     Estado: "Activo",
     AccesoTrazas: false,
     Permisos: [] as any[],
+    PermisosTareas: {
+      HabilitarTareas: false,
+      PuedeCrearTareas: false,
+      PuedeAdministracionTareas: false,
+      AdministracionBandejas: false,
+      PuedeConsultarTareas: false,
+      PuedeVerMonitorTareas: false,
+    },
   });
   const { toast } = useToast();
   const confirm = useConfirm();
@@ -201,6 +209,14 @@ export default function RolesPage() {
           Estado: data.data.Estado,
           AccesoTrazas: data.data.AccesoTrazas || false,
           Permisos: permisos,
+          PermisosTareas: data.data.PermisosTareas || {
+            HabilitarTareas: false,
+            PuedeCrearTareas: false,
+            PuedeAdministracionTareas: false,
+            AdministracionBandejas: false,
+            PuedeConsultarTareas: false,
+            PuedeVerMonitorTareas: false,
+          },
         });
         setShowModal(true);
       }
@@ -261,6 +277,14 @@ export default function RolesPage() {
       Estado: "Activo",
       AccesoTrazas: false,
       Permisos: modulos.map((m) => ({ ...m })),
+      PermisosTareas: {
+        HabilitarTareas: false,
+        PuedeCrearTareas: false,
+        PuedeAdministracionTareas: false,
+        AdministracionBandejas: false,
+        PuedeConsultarTareas: false,
+        PuedeVerMonitorTareas: false,
+      },
     });
   };
 
@@ -432,6 +456,167 @@ export default function RolesPage() {
                   <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">
                     Permite al rol acceder a la pantalla de consultas y auditoría de trazas del sistema
                   </p>
+                </div>
+
+                {/* Permisos de Tareas */}
+                <div className="space-y-3 border rounded-md p-4 bg-gray-50 dark:bg-gray-900">
+                  <Label className="text-base font-semibold">Permisos de Tareas</Label>
+                  
+                  {/* Habilitar Tareas - Master Toggle */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.PermisosTareas.HabilitarTareas}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            PermisosTareas: {
+                              ...formData.PermisosTareas,
+                              HabilitarTareas: e.target.checked,
+                              // Si se deshabilita, deshabilitar todos los sub-permisos
+                              PuedeCrearTareas: e.target.checked ? formData.PermisosTareas.PuedeCrearTareas : false,
+                              PuedeAdministracionTareas: e.target.checked ? formData.PermisosTareas.PuedeAdministracionTareas : false,
+                              AdministracionBandejas: e.target.checked ? formData.PermisosTareas.AdministracionBandejas : false,
+                              PuedeConsultarTareas: e.target.checked ? formData.PermisosTareas.PuedeConsultarTareas : false,
+                              PuedeVerMonitorTareas: e.target.checked ? formData.PermisosTareas.PuedeVerMonitorTareas : false,
+                            },
+                          })
+                        }
+                        className="w-4 h-4"
+                      />
+                      <span className="font-semibold">Habilitar Tareas</span>
+                    </Label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">
+                      {formData.PermisosTareas.HabilitarTareas 
+                        ? 'Los usuarios con este rol pueden participar en el sistema de tareas (aparecerán en listas de asignación y podrán ver sus bandejas)'
+                        : 'Los usuarios con este rol NO tendrán acceso al sistema de tareas (no aparecerán en listas ni verán menús relacionados)'}
+                    </p>
+                  </div>
+
+                  {/* Sub-permisos - Solo visibles si HabilitarTareas está activo */}
+                  {formData.PermisosTareas.HabilitarTareas && (
+                    <div className="ml-6 space-y-3 border-l-2 border-blue-500 pl-4">
+                      <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">
+                        Permisos específicos (seleccione los que apliquen):
+                      </p>
+                      
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosTareas.PuedeCrearTareas}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosTareas: {
+                                ...formData.PermisosTareas,
+                                PuedeCrearTareas: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Crear Tareas</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Ver botón "Crear Tarea" y "Agregar para Tarea" en módulos
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosTareas.PuedeAdministracionTareas}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosTareas: {
+                                ...formData.PermisosTareas,
+                                PuedeAdministracionTareas: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Administración de Tareas</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a pantalla de administración (crear plantillas, configurar campos)
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosTareas.AdministracionBandejas}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosTareas: {
+                                ...formData.PermisosTareas,
+                                AdministracionBandejas: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Administración de Bandejas</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a pantalla de gestión de bandejas (crear, editar, asignar roles)
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosTareas.PuedeConsultarTareas}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosTareas: {
+                                ...formData.PermisosTareas,
+                                PuedeConsultarTareas: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Consultar Tareas</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a pantalla de consulta avanzada con filtros
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosTareas.PuedeVerMonitorTareas}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosTareas: {
+                                ...formData.PermisosTareas,
+                                PuedeVerMonitorTareas: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Monitor de Tareas</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a dashboard de monitoreo con indicadores y estadísticas
+                          </p>
+                        </div>
+                      </Label>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">

@@ -78,6 +78,10 @@ export default function ModuloDinamicoV2Page() {
   // Estado para permisos del usuario
   const [permisos, setPermisos] = useState<any>(null);
   const [esAdmin, setEsAdmin] = useState(false);
+  const [permisosTareas, setPermisosTareas] = useState({
+    HabilitarTareas: false,
+    PuedeCrearTareas: false,
+  });
 
   // Estado para selección de registros para tareas
   const [registrosSeleccionados, setRegistrosSeleccionados] = useState<number[]>([]);
@@ -85,6 +89,7 @@ export default function ModuloDinamicoV2Page() {
 
   useEffect(() => {
     loadData();
+    loadPermisosTareas();
   }, [moduloId]);
 
   // Limpiar selección cuando cambia el filtrado
@@ -166,6 +171,36 @@ export default function ModuloDinamicoV2Page() {
       }
     } catch (error) {
       console.error("Error cargando permisos:", error);
+    }
+  };
+
+  const loadPermisosTareas = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      
+      // Administrador siempre tiene permiso
+      if (user.Roles?.includes("Administrador")) {
+        setPermisosTareas({
+          HabilitarTareas: true,
+          PuedeCrearTareas: true,
+        });
+        return;
+      }
+
+      const response = await fetch("/api/permisos-tareas", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setPermisosTareas({
+          HabilitarTareas: data.data.HabilitarTareas,
+          PuedeCrearTareas: data.data.PuedeCrearTareas,
+        });
+      }
+    } catch (error) {
+      console.error("Error cargando permisos de tareas:", error);
     }
   };
 
@@ -1360,21 +1395,23 @@ export default function ModuloDinamicoV2Page() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                {/* Columna de selección */}
-                <th className="px-4 py-3 text-center">
-                  <button
-                    onClick={toggleSeleccionTodos}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
-                    type="button"
-                    title={todosSeleccionados ? "Deseleccionar todos" : "Seleccionar todos"}
-                  >
-                    {todosSeleccionados ? (
-                      <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    ) : (
-                      <Square className="h-5 w-5 text-gray-400" />
-                    )}
-                  </button>
-                </th>
+                {/* Columna de selección - Solo visible si puede crear tareas */}
+                {permisosTareas.HabilitarTareas && permisosTareas.PuedeCrearTareas && (
+                  <th className="px-4 py-3 text-center">
+                    <button
+                      onClick={toggleSeleccionTodos}
+                      className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                      type="button"
+                      title={todosSeleccionados ? "Deseleccionar todos" : "Seleccionar todos"}
+                    >
+                      {todosSeleccionados ? (
+                        <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      ) : (
+                        <Square className="h-5 w-5 text-gray-400" />
+                      )}
+                    </button>
+                  </th>
+                )}
                 {camposVisiblesGrilla.map((campo) => (
                   <th
                     key={campo.Id}
@@ -1415,20 +1452,22 @@ export default function ModuloDinamicoV2Page() {
               ) : (
                 currentRecords.map((registro) => (
                   <tr key={registro.Id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    {/* Columna de selección */}
-                    <td className="px-4 py-4 text-center">
-                      <button
-                        onClick={() => toggleSeleccionRegistro(registro.Id)}
-                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
-                        type="button"
-                      >
-                        {registrosSeleccionados.includes(registro.Id) ? (
-                          <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                        ) : (
-                          <Square className="h-5 w-5 text-gray-400" />
-                        )}
-                      </button>
-                    </td>
+                    {/* Columna de selección - Solo visible si puede crear tareas */}
+                    {permisosTareas.HabilitarTareas && permisosTareas.PuedeCrearTareas && (
+                      <td className="px-4 py-4 text-center">
+                        <button
+                          onClick={() => toggleSeleccionRegistro(registro.Id)}
+                          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                          type="button"
+                        >
+                          {registrosSeleccionados.includes(registro.Id) ? (
+                            <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                          ) : (
+                            <Square className="h-5 w-5 text-gray-400" />
+                          )}
+                        </button>
+                      </td>
+                    )}
                     {camposVisiblesGrilla.map((campo) => (
                       <td key={campo.Id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                         {renderCellValue(campo, registro)}
@@ -1474,7 +1513,7 @@ export default function ModuloDinamicoV2Page() {
         </div>
         
         {/* Botón Agregar para Tarea */}
-        {registrosSeleccionados.length > 0 && (
+        {registrosSeleccionados.length > 0 && permisosTareas.HabilitarTareas && permisosTareas.PuedeCrearTareas && (
           <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-800">
             <div className="flex items-center justify-between">
               <span className="text-sm text-blue-700 dark:text-blue-300">

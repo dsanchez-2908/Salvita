@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
           m.Nombre as ModuloNombre,
           m.Tipo as ModuloTipo
          FROM TD_DASHBOARD_CONFIG dc
-         INNER JOIN TD_MODULOS m ON dc.ModuloId = m.Id
+         LEFT JOIN TD_MODULOS m ON dc.ModuloId = m.Id
          WHERE dc.RolId = @rolId
          ORDER BY dc.Orden`,
         { rolId: parseInt(rolId) }
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
           m.Nombre as ModuloNombre,
           m.Tipo as ModuloTipo
          FROM TD_DASHBOARD_CONFIG dc
-         INNER JOIN TD_MODULOS m ON dc.ModuloId = m.Id
+         LEFT JOIN TD_MODULOS m ON dc.ModuloId = m.Id
          INNER JOIN TR_USUARIO_ROL ur ON dc.RolId = ur.RolId
          WHERE ur.UsuarioId = @userId
          ORDER BY dc.Orden`,
@@ -106,17 +106,20 @@ export async function POST(request: NextRequest) {
       
       await execute(
         `INSERT INTO TD_DASHBOARD_CONFIG 
-         (RolId, ModuloId, TipoVisualizacion, CampoAgrupamiento, CampoFiltro, ValorFiltro, FiltroOperador, FiltroActivo, Orden, UsuarioCreacion)
-         VALUES (@rolId, @moduloId, @tipoVisualizacion, @campoAgrupamiento, @campoFiltro, @valorFiltro, @filtroOperador, @filtroActivo, @orden, @usuarioCreacion)`,
+         (RolId, Tipo, ModuloId, TipoVisualizacion, CampoAgrupamiento, CampoFiltro, ValorFiltro, FiltroOperador, FiltroActivo, TareasTipoVisualizacion, TareasCategoria, Orden, UsuarioCreacion)
+         VALUES (@rolId, @tipo, @moduloId, @tipoVisualizacion, @campoAgrupamiento, @campoFiltro, @valorFiltro, @filtroOperador, @filtroActivo, @tareasTipoVisualizacion, @tareasCategoria, @orden, @usuarioCreacion)`,
         {
           rolId: RolId,
-          moduloId: config.ModuloId,
-          tipoVisualizacion: config.TipoVisualizacion,
+          tipo: config.Tipo || 'Modulos',
+          moduloId: config.ModuloId || null,
+          tipoVisualizacion: config.TipoVisualizacion || null,
           campoAgrupamiento: config.CampoAgrupamiento || null,
           campoFiltro: config.CampoFiltro || null,
           valorFiltro: config.ValorFiltro || null,
-          filtroOperador: config.FiltroOperador || '=',
-          filtroActivo: config.FiltroActivo || false,
+          filtroOperador: config.FiltroOperador || null,
+          filtroActivo: config.FiltroActivo !== undefined ? config.FiltroActivo : null,
+          tareasTipoVisualizacion: config.TareasTipoVisualizacion || null,
+          tareasCategoria: config.TareasCategoria || null,
           orden: i,
           usuarioCreacion: user.usuario,
         }

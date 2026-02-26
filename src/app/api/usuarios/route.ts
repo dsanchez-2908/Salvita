@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    const soloHabilitadosParaTareas = searchParams.get('soloHabilitadosParaTareas') === 'true';
 
     if (id) {
       // Obtener un usuario específico con sus roles
@@ -53,16 +54,35 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Obtener todos los usuarios
-    const usuarios = await query<any>(
-      `SELECT u.Id, u.Nombre, u.Usuario, u.Estado, u.FechaAlta, u.FechaModificacion,
-              STRING_AGG(r.Nombre, ', ') as Roles
-       FROM TD_USUARIOS u
-       LEFT JOIN TR_USUARIO_ROL ur ON u.Id = ur.UsuarioId
-       LEFT JOIN TD_ROLES r ON ur.RolId = r.Id
-       GROUP BY u.Id, u.Nombre, u.Usuario, u.Estado, u.FechaAlta, u.FechaModificacion
-       ORDER BY u.Id DESC`
-    );
+    // Obtener todos los usuarios con filtro opcional de tareas
+    let usuariosQuery = `
+      SELECT u.Id, u.Nombre, u.Usuario, u.Estado, u.FechaAlta, u.FechaModificacion,
+             STRING_AGG(r.Nombre, ', ') as Roles
+      FROM TD_USUARIOS u
+      LEFT JOIN TR_USUARIO_ROL ur ON u.Id = ur.UsuarioId
+      LEFT JOIN TD_ROLES r ON ur.RolId = r.Id
+    `;
+
+    if (soloHabilitadosParaTareas) {
+      // Filtrar solo usuarios que tienen HabilitarTareas=true en alguno de sus roles
+      usuariosQuery += `
+      WHERE EXISTS (
+        SELECT 1
+        FROM TR_USUARIO_ROL ur2
+        INNER JOIN TD_ROLES r2 ON ur2.RolId = r2.Id AND r2.Estado = 'Activo'
+        LEFT JOIN TR_ROL_TAREAS_PERMISO tp ON r2.Id = tp.RolId
+        WHERE ur2.UsuarioId = u.Id
+        AND (r2.Nombre = 'Administrador' OR tp.HabilitarTareas = 1)
+      )
+      `;
+    }
+
+    usuariosQuery += `
+      GROUP BY u.Id, u.Nombre, u.Usuario, u.Estado, u.FechaAlta, u.FechaModificacion
+      ORDER BY u.Id DESC
+    `;
+
+    const usuarios = await query<any>(usuariosQuery);
 
     return NextResponse.json<ApiResponse>({
       success: true,

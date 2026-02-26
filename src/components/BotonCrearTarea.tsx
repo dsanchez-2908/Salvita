@@ -8,8 +8,38 @@ import { useToast } from "@/components/ui/use-toast";
 
 export function BotonCrearTarea() {
   const [cantidadRegistros, setCantidadRegistros] = useState(0);
+  const [tienePermiso, setTienePermiso] = useState(false);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
+
+  const verificarPermisos = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      
+      // Administrador siempre tiene permiso
+      if (user.Roles?.includes("Administrador")) {
+        setTienePermiso(true);
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch("/api/permisos-tareas", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setTienePermiso(data.data.HabilitarTareas && data.data.PuedeCrearTareas);
+      }
+    } catch (error) {
+      console.error("Error verificando permisos:", error);
+      setTienePermiso(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const cargarCantidadRegistros = async () => {
     try {
@@ -28,6 +58,7 @@ export function BotonCrearTarea() {
   };
 
   useEffect(() => {
+    verificarPermisos();
     cargarCantidadRegistros();
 
     // Listener para actualizar contador cuando se agreguen registros
@@ -41,6 +72,11 @@ export function BotonCrearTarea() {
       window.removeEventListener("registrosTemporalesActualizados", handleActualizacion);
     };
   }, []);
+
+  // No mostrar nada mientras se verifica el permiso o si no tiene permiso
+  if (loading || !tienePermiso) {
+    return null;
+  }
 
   return (
     <Button

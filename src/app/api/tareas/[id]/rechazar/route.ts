@@ -9,7 +9,7 @@ interface ApiResponse {
   message?: string;
 }
 
-// POST /api/tareas/[id]/rechazar - Rechazar una tarea tomada
+// POST /api/tareas/[id]/rechazar - Rechazar una tarea
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -34,9 +34,13 @@ export async function POST(
       );
     }
 
-    // Verificar que la tarea existe y está tomada por el usuario
+    // Verificar que la tarea existe
     const tareas = await query(
-      `SELECT * FROM TD_TAREAS WHERE Id = @tareaId`,
+      `
+      SELECT t.*
+      FROM TD_TAREAS t
+      WHERE t.Id = @tareaId
+      `,
       { tareaId }
     );
 
@@ -49,17 +53,11 @@ export async function POST(
 
     const tarea = tareas[0];
 
-    if (tarea.Estado !== "Tomada") {
+    // Verificar que el usuario tiene acceso a la tarea
+    const tieneAcceso = await verificarAccesoTarea(user.userId, tarea);
+    if (!tieneAcceso) {
       return NextResponse.json<ApiResponse>(
-        { success: false, error: "Solo se pueden rechazar tareas tomadas" },
-        { status: 400 }
-      );
-    }
-
-    // Verificar que el usuario es quien tomó la tarea
-    if (tarea.UsuarioTomadaPorId !== user.userId) {
-      return NextResponse.json<ApiResponse>(
-        { success: false, error: "Solo puedes rechazar tareas que has tomado" },
+        { success: false, error: "No tienes acceso a esta tarea" },
         { status: 403 }
       );
     }
@@ -102,4 +100,37 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+// Función auxiliar para verificar acceso a tarea
+async function verificarAccesoTarea(userId: number, tarea: any): Promise<boolean> {
+  // Si el usuario tomó la tarea, tiene acceso
+  if (tarea.UsuarioTomadaPorId === userId) {
+    return true;
+  }
+
+  // Si es asignación directa al usuario
+  if (tarea.TipoAsignacion === "Usuario" && tarea.UsuarioAsignadoId === userId) {
+    return true;
+  }
+
+  // Si es asignación a bandeja, verificar si el usuario tiene acceso a la bandeja
+  if (tarea.TipoAsignacion === "Bandeja") {
+    const acceso = await query(
+      `
+      SELECT 1 
+      FROM TR_BANDEJA_USUARIO 
+      WHERE BandejaId = @bandejaId AND UsuarioId = @userId
+      UNION
+      SELECT 1
+      FROM TR_BANDEJA_ROL br
+      INNER JOIN TR_USUARIO_ROL ur ON br.RolId = ur.RolId
+      WHERE br.BandejaId = @bandejaId AND ur.UsuarioId = @userId
+      `,
+      { bandejaId: tarea.BandejaAsignadaId, userId }
+    );
+    return acceso.length > 0;
+  }
+
+  return false;
 }

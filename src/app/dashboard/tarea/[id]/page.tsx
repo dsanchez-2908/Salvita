@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -114,7 +114,9 @@ interface Comentario {
 export default function TareaDetallePage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const tareaId = params?.id as string;
+  const modoConsulta = searchParams?.get("modo") === "consulta";
   const { toast } = useToast();
 
   const [tarea, setTarea] = useState<Tarea | null>(null);
@@ -250,7 +252,7 @@ export default function TareaDetallePage() {
   const cargarUsuarios = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/api/usuarios", {
+      const response = await fetch("/api/usuarios?soloHabilitadosParaTareas=true", {
         headers: { Authorization: `Bearer ${token}` },
       });
       
@@ -306,7 +308,7 @@ export default function TareaDetallePage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "Error al tomar la tarea");
+        throw new Error(error.error || error.message || "Error al tomar la tarea");
       }
 
       toast({
@@ -341,7 +343,7 @@ export default function TareaDetallePage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "Error al finalizar la tarea");
+        throw new Error(error.error || error.message || "Error al finalizar la tarea");
       }
 
       toast({
@@ -387,7 +389,7 @@ export default function TareaDetallePage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "Error al rechazar la tarea");
+        throw new Error(error.error || error.message || "Error al rechazar la tarea");
       }
 
       toast({
@@ -428,7 +430,7 @@ export default function TareaDetallePage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "Error al agregar comentario");
+        throw new Error(error.error || error.message || "Error al agregar comentario");
       }
 
       setNuevoComentario("");
@@ -460,7 +462,7 @@ export default function TareaDetallePage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "Error al actualizar registro");
+        throw new Error(error.error || error.message || "Error al actualizar registro");
       }
 
       // Actualizar el estado local
@@ -517,7 +519,7 @@ export default function TareaDetallePage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "Error al reasignar la tarea");
+        throw new Error(error.error || error.message || "Error al reasignar la tarea");
       }
 
       toast({
@@ -999,14 +1001,16 @@ export default function TareaDetallePage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex gap-2 flex-wrap">
-            {tarea.Estado === "Pendiente" && tarea.TipoAsignacion === "Bandeja" && (
+            {/* Botón Tomar: solo para bandejas grupales en estado Pendiente (NO en modo consulta) */}
+            {!modoConsulta && tarea.Estado === "Pendiente" && tarea.TipoAsignacion === "Bandeja" && (
               <Button onClick={handleTomarTarea} disabled={procesando}>
                 <User className="mr-2 h-4 w-4" />
                 Tomar Tarea
               </Button>
             )}
             
-            {tarea.Estado === "Tomada" && (
+            {/* Botones Finalizar/Rechazar: para tareas Tomadas O para tareas de Usuario en Pendiente */}
+            {(tarea.Estado === "Tomada" || (tarea.Estado === "Pendiente" && tarea.TipoAsignacion === "Usuario")) && (
               <>
                 <Button 
                   onClick={() => setShowFinalizarDialog(true)} 

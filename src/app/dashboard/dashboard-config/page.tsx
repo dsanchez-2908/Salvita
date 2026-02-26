@@ -27,6 +27,7 @@ interface Campo {
 
 interface ConfigWidget {
   id: string;
+  Tipo: "Modulos" | "Tareas";
   ModuloId: number;
   ModuloNombre: string;
   TipoVisualizacion: "Agrupamiento" | "DetalleFiltrado" | "Totalizado";
@@ -35,6 +36,9 @@ interface ConfigWidget {
   ValorFiltro: string | null;
   FiltroOperador: string | null;
   FiltroActivo: boolean;
+  // Campos específicos para Tareas
+  TareasTipoVisualizacion: "PendientesPropios" | "PendientesTotales" | null;
+  TareasCategoria: "BandejaPersonal" | "BandejasGrupal" | null;
 }
 
 interface ValorLista {
@@ -163,14 +167,19 @@ export default function DashboardConfigPage() {
       if (data.success && data.data.length > 0) {
         const widgetsExistentes = data.data.map((config: any, index: number) => ({
           id: `widget-${Date.now()}-${index}`,
-          ModuloId: config.ModuloId,
-          ModuloNombre: config.ModuloNombre,
-          TipoVisualizacion: config.TipoVisualizacion,
-          CampoAgrupamiento: config.CampoAgrupamiento,
-          CampoFiltro: config.CampoFiltro,
-          ValorFiltro: config.ValorFiltro,
+          Tipo: config.Tipo || "Modulos", // Default a Modulos para compatibilidad con configs viejos
+          // Campos de Módulos
+          ModuloId: config.ModuloId || 0,
+          ModuloNombre: config.ModuloNombre || "",
+          TipoVisualizacion: config.TipoVisualizacion || "Agrupamiento",
+          CampoAgrupamiento: config.CampoAgrupamiento || null,
+          CampoFiltro: config.CampoFiltro || null,
+          ValorFiltro: config.ValorFiltro || null,
           FiltroOperador: config.FiltroOperador || '=',
           FiltroActivo: config.FiltroActivo || false,
+          // Campos de Tareas
+          TareasTipoVisualizacion: config.TareasTipoVisualizacion || null,
+          TareasCategoria: config.TareasCategoria || null,
         }));
         setWidgets(widgetsExistentes);
       } else {
@@ -184,6 +193,7 @@ export default function DashboardConfigPage() {
   const agregarWidget = () => {
     const nuevoWidget: ConfigWidget = {
       id: `widget-${Date.now()}`,
+      Tipo: "Modulos",
       ModuloId: 0,
       ModuloNombre: "",
       TipoVisualizacion: "Agrupamiento",
@@ -192,6 +202,8 @@ export default function DashboardConfigPage() {
       ValorFiltro: null,
       FiltroOperador: "=",
       FiltroActivo: false,
+      TareasTipoVisualizacion: null,
+      TareasCategoria: null,
     };
     setWidgets([...widgets, nuevoWidget]);
   };
@@ -200,6 +212,24 @@ export default function DashboardConfigPage() {
     setWidgets(prevWidgets => prevWidgets.map(w => {
       if (w.id === id) {
         const updated = { ...w, [campo]: valor };
+        
+        // Si cambia el tipo (Modulos/Tareas), resetear campos específicos
+        if (campo === "Tipo") {
+          if (valor === "Modulos") {
+            updated.TareasTipoVisualizacion = null;
+            updated.TareasCategoria = null;
+            updated.TipoVisualizacion = "Agrupamiento";
+          } else if (valor === "Tareas") {
+            updated.ModuloId = 0;
+            updated.ModuloNombre = "";
+            updated.CampoAgrupamiento = null;
+            updated.CampoFiltro = null;
+            updated.ValorFiltro = null;
+            updated.TipoVisualizacion = "Agrupamiento";
+            updated.TareasTipoVisualizacion = "PendientesPropios";
+            updated.TareasCategoria = "BandejaPersonal";
+          }
+        }
         
         // Si cambia el módulo, actualizar el nombre y resetear campos
         if (campo === "ModuloId") {
@@ -316,32 +346,46 @@ export default function DashboardConfigPage() {
 
     // Validar widgets
     for (const widget of widgets) {
-      if (!widget.ModuloId) {
-        toast({
-          title: "Error",
-          description: "Todos los widgets deben tener un módulo seleccionado",
-          variant: "destructive",
-        });
-        return;
-      }
+      // Validar widgets de Módulos
+      if (widget.Tipo === "Modulos") {
+        if (!widget.ModuloId) {
+          toast({
+            title: "Error",
+            description: "Todos los widgets de módulos deben tener un módulo seleccionado",
+            variant: "destructive",
+          });
+          return;
+        }
 
-      if (widget.TipoVisualizacion === "Agrupamiento" && !widget.CampoAgrupamiento) {
-        toast({
-          title: "Error",
-          description: `El widget de ${widget.ModuloNombre} tipo Agrupamiento debe tener un campo seleccionado`,
-          variant: "destructive",
-        });
-        return;
-      }
+        if (widget.TipoVisualizacion === "Agrupamiento" && !widget.CampoAgrupamiento) {
+          toast({
+            title: "Error",
+            description: `El widget de ${widget.ModuloNombre} tipo Agrupamiento debe tener un campo seleccionado`,
+            variant: "destructive",
+          });
+          return;
+        }
 
-      // Validar filtro opcional para DetalleFiltrado y Totalizado
-      if (widget.FiltroActivo && (!widget.CampoFiltro || !widget.ValorFiltro)) {
-        toast({
-          title: "Error",
-          description: `El widget de ${widget.ModuloNombre} con filtro activo debe tener campo y valor de filtro`,
-          variant: "destructive",
-        });
-        return;
+        if (widget.FiltroActivo && (!widget.CampoFiltro || !widget.ValorFiltro)) {
+          toast({
+            title: "Error",
+            description: `El widget de ${widget.ModuloNombre} con filtro activo debe tener campo y valor de filtro`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+      
+      // Validar widgets de Tareas
+      if (widget.Tipo === "Tareas") {
+        if (!widget.TareasTipoVisualizacion || !widget.TareasCategoria) {
+          toast({
+            title: "Error",
+            description: "Los widgets de tareas deben tener tipo de visualización y categoría seleccionados",
+            variant: "destructive",
+          });
+          return;
+        }
       }
     }
 
@@ -358,13 +402,18 @@ export default function DashboardConfigPage() {
         body: JSON.stringify({
           RolId: rolSeleccionado,
           Configuraciones: widgets.map(w => ({
-            ModuloId: w.ModuloId,
-            TipoVisualizacion: w.TipoVisualizacion,
-            CampoAgrupamiento: w.CampoAgrupamiento,
-            CampoFiltro: w.CampoFiltro,
-            ValorFiltro: w.ValorFiltro,
-            FiltroOperador: w.FiltroOperador || '=',
-            FiltroActivo: w.FiltroActivo || false,
+            Tipo: w.Tipo,
+            // Campos para widgets de Módulos
+            ModuloId: w.Tipo === "Modulos" ? w.ModuloId : null,
+            TipoVisualizacion: w.Tipo === "Modulos" ? w.TipoVisualizacion : null,
+            CampoAgrupamiento: w.Tipo === "Modulos" ? w.CampoAgrupamiento : null,
+            CampoFiltro: w.Tipo === "Modulos" ? w.CampoFiltro : null,
+            ValorFiltro: w.Tipo === "Modulos" ? w.ValorFiltro : null,
+            FiltroOperador: w.Tipo === "Modulos" ? (w.FiltroOperador || '=') : null,
+            FiltroActivo: w.Tipo === "Modulos" ? (w.FiltroActivo || false) : null,
+            // Campos para widgets de Tareas
+            TareasTipoVisualizacion: w.Tipo === "Tareas" ? w.TareasTipoVisualizacion : null,
+            TareasCategoria: w.Tipo === "Tareas" ? w.TareasCategoria : null,
           })),
         }),
       });
@@ -491,38 +540,54 @@ export default function DashboardConfigPage() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>Módulo</Label>
-                              <select
-                                value={widget.ModuloId || ""}
-                                onChange={(e) =>
-                                  actualizarWidget(widget.id, "ModuloId", e.target.value)
-                                }
-                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                              >
-                                <option value="">Seleccione un módulo...</option>
-                                {modulosDisponibles.map((modulo) => (
-                                  <option key={modulo.Id} value={modulo.Id}>
-                                    {modulo.Nombre}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
+                          {/* Selector de Tipo: Módulos o Tareas */}
+                          <div className="space-y-2">
+                            <Label>Tipo de Widget</Label>
+                            <select
+                              value={widget.Tipo}
+                              onChange={(e) => actualizarWidget(widget.id, "Tipo", e.target.value)}
+                              className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                            >
+                              <option value="Modulos">Módulos</option>
+                              <option value="Tareas">Tareas</option>
+                            </select>
+                          </div>
 
-                            <div className="space-y-2">
-                              <Label>Tipo de Visualización</Label>
-                              <select
-                                value={widget.TipoVisualizacion}
-                                onChange={(e) =>
-                                  actualizarWidget(widget.id, "TipoVisualizacion", e.target.value)
-                                }
-                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                                disabled={!widget.ModuloId}
-                              >
-                                <option value="Agrupamiento">Agrupamiento</option>
-                                <option value="DetalleFiltrado">Detalle Filtrado</option>
-                                <option value="Totalizado">Totalizado</option>
+                          {/* Campos para Widgets de Módulos */}
+                          {widget.Tipo === "Modulos" && (
+                            <>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label>Módulo</Label>
+                                  <select
+                                    value={widget.ModuloId || ""}
+                                    onChange={(e) =>
+                                      actualizarWidget(widget.id, "ModuloId", e.target.value)
+                                    }
+                                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                  >
+                                    <option value="">Seleccione un módulo...</option>
+                                    {modulosDisponibles.map((modulo) => (
+                                      <option key={modulo.Id} value={modulo.Id}>
+                                        {modulo.Nombre}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label>Tipo de Visualización</Label>
+                                  <select
+                                    value={widget.TipoVisualizacion}
+                                    onChange={(e) =>
+                                      actualizarWidget(widget.id, "TipoVisualizacion", e.target.value)
+                                    }
+                                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                    disabled={!widget.ModuloId}
+                                  >
+                                    <option value="Agrupamiento">Agrupamiento</option>
+                                    <option value="DetalleFiltrado">Detalle Filtrado</option>
+                                    <option value="Totalizado">Totalizado</option>
                               </select>
                             </div>
                           </div>
@@ -829,6 +894,81 @@ export default function DashboardConfigPage() {
                                       );
                                     })()}
                                   </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                            </>
+                          )}
+
+                          {/* Campos para Widgets de Tareas */}
+                          {widget.Tipo === "Tareas" && (
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label>Tipo de Visualización</Label>
+                                  <select
+                                    value={widget.TareasTipoVisualizacion || ""}
+                                    onChange={(e) =>
+                                      actualizarWidget(widget.id, "TareasTipoVisualizacion", e.target.value)
+                                    }
+                                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                  >
+                                    <option value="">Seleccione tipo...</option>
+                                    <option value="PendientesPropios">Pendientes Propios</option>
+                                    <option value="PendientesTotales">Pendientes Totales</option>
+                                  </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label>Categoría</Label>
+                                  <select
+                                    value={widget.TareasCategoria || ""}
+                                    onChange={(e) =>
+                                      actualizarWidget(widget.id, "TareasCategoria", e.target.value)
+                                    }
+                                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                  >
+                                    <option value="">Seleccione categoría...</option>
+                                    <option value="BandejaPersonal">Bandeja Personal</option>
+                                    <option value="BandejasGrupal">Bandejas Grupal</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              {/* Descripción del widget según configuración */}
+                              {widget.TareasTipoVisualizacion && widget.TareasCategoria && (
+                                <div className="p-3 bg-blue-50 rounded-md border border-blue-200">
+                                  <p className="text-sm text-blue-900">
+                                    {widget.TareasTipoVisualizacion === "PendientesPropios" &&
+                                      widget.TareasCategoria === "BandejaPersonal" && (
+                                        <>
+                                          <strong>Visualización:</strong> Muestra las tareas pendientes del usuario en su bandeja personal.
+                                          Incluye contador de tareas vencidas.
+                                        </>
+                                      )}
+                                    {widget.TareasTipoVisualizacion === "PendientesPropios" &&
+                                      widget.TareasCategoria === "BandejasGrupal" && (
+                                        <>
+                                          <strong>Visualización:</strong> Muestra agregado de todas las bandejas del usuario:
+                                          total pendientes, tareas tomadas por el usuario, y tareas vencidas.
+                                        </>
+                                      )}
+                                    {widget.TareasTipoVisualizacion === "PendientesTotales" &&
+                                      widget.TareasCategoria === "BandejaPersonal" && (
+                                        <>
+                                          <strong>Visualización:</strong> Lista todos los usuarios con tareas pendientes en su bandeja personal,
+                                          mostrando contadores de pendientes y vencidas por usuario.
+                                        </>
+                                      )}
+                                    {widget.TareasTipoVisualizacion === "PendientesTotales" &&
+                                      widget.TareasCategoria === "BandejasGrupal" && (
+                                        <>
+                                          <strong>Visualización:</strong> Lista todas las bandejas con sus tareas pendientes y tomadas,
+                                          mostrando contadores totales y vencidas por bandeja.
+                                        </>
+                                      )}
+                                  </p>
                                 </div>
                               )}
                             </div>

@@ -7,24 +7,32 @@ import { useRouter } from "next/navigation";
 
 interface DashboardConfig {
   Id: number;
-  ModuloId: number;
-  ModuloNombre: string;
-  TipoVisualizacion: "Agrupamiento" | "DetalleFiltrado" | "Totalizado";
-  CampoAgrupamiento: string | null;
-  CampoFiltro: string | null;
-  ValorFiltro: string | null;
-  FiltroOperador: string | null;
-  FiltroActivo: boolean;
+  Tipo: "Modulos" | "Tareas";
+  // Campos para Widgets de Módulos
+  ModuloId?: number;
+  ModuloNombre?: string;
+  TipoVisualizacion?: "Agrupamiento" | "DetalleFiltrado" | "Totalizado";
+  CampoAgrupamiento?: string | null;
+  CampoFiltro?: string | null;
+  ValorFiltro?: string | null;
+  FiltroOperador?: string | null;
+  FiltroActivo?: boolean;
+  // Campos para Widgets de Tareas
+  TareasTipoVisualizacion?: "PendientesPropios" | "PendientesTotales" | null;
+  TareasCategoria?: "BandejaPersonal" | "BandejasGrupal" | null;
 }
 
 interface WidgetData {
   config: DashboardConfig;
+  // Datos para widgets de Módulos
   total?: number;
   filtroAplicado?: string | null;
   agrupados?: Array<{ [key: string]: any; Total: number }>;
   registros?: any[];
   campos?: any[];
   nombreValorFiltro?: string;
+  // Datos para widgets de Tareas
+  tareasData?: any;
 }
 
 export default function DashboardPage() {
@@ -116,28 +124,60 @@ export default function DashboardPage() {
       const configData = await configResponse.json();
 
       if (configData.success && configData.data.length > 0) {
+        console.log("📊 Configuraciones cargadas:", configData.data);
         setConfiguraciones(configData.data);
 
         // Cargar datos para cada widget
         const widgetsPromises = configData.data.map(async (config: DashboardConfig) => {
           try {
-            const dataResponse = await fetch(`/api/dashboard-data?configId=${config.Id}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            const dataResult = await dataResponse.json();
+            console.log(`🔄 Cargando widget Tipo=${config.Tipo}, Id=${config.Id}`);
             
-            if (dataResult.success) {
-              return dataResult.data as WidgetData;
+            // Widgets de Módulos
+            if (config.Tipo === "Modulos" || !config.Tipo) {
+              const dataResponse = await fetch(`/api/dashboard-data?configId=${config.Id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              const dataResult = await dataResponse.json();
+              
+              console.log(`✅ Widget Módulo ${config.Id}:`, dataResult.success);
+              
+              if (dataResult.success) {
+                return dataResult.data as WidgetData;
+              }
+            }
+            // Widgets de Tareas
+            else if (config.Tipo === "Tareas") {
+              const url = `/api/dashboard-task-data?tipoVisualizacion=${config.TareasTipoVisualizacion}&categoria=${config.TareasCategoria}`;
+              console.log(`📋 Cargando tareas desde: ${url}`);
+              
+              const dataResponse = await fetch(url, { 
+                headers: { Authorization: `Bearer ${token}` } 
+              });
+              const dataResult = await dataResponse.json();
+              
+              console.log(`✅ Widget Tareas ${config.Id}:`, dataResult);
+              
+              if (dataResult.success) {
+                return {
+                  config,
+                  tareasData: dataResult.data,
+                } as WidgetData;
+              } else {
+                console.error(`❌ Error en widget Tareas ${config.Id}:`, dataResult.error);
+              }
             }
             return null;
           } catch (error) {
-            console.error(`Error cargando datos del widget ${config.Id}:`, error);
+            console.error(`❌ Error cargando datos del widget ${config.Id}:`, error);
             return null;
           }
         });
 
         const widgetsResults = await Promise.all(widgetsPromises);
-        setWidgetsData(widgetsResults.filter(w => w !== null) as WidgetData[]);
+        const validWidgets = widgetsResults.filter(w => w !== null) as WidgetData[];
+        console.log(`📦 Total widgets cargados: ${validWidgets.length} de ${widgetsResults.length}`);
+        console.log("📦 Widgets válidos:", validWidgets);
+        setWidgetsData(validWidgets);
       }
     } catch (error) {
       console.error("Error cargando dashboard:", error);
@@ -305,6 +345,195 @@ export default function DashboardPage() {
     );
   };
 
+  // Renderizar widgets de Tareas
+  const renderWidgetTareasPendientesPropiosBandejaPersonal = (widget: WidgetData) => {
+    const data = widget.tareasData || {};
+    
+    return (
+      <Card key={widget.config.Id}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-orange-600" />
+            <CardTitle className="text-lg">Mis Tareas Pendientes</CardTitle>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Bandeja Personal
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-900/20 rounded">
+              <span className="font-medium">Pendientes</span>
+              <span className="text-3xl font-bold text-orange-600">{data.TotalPendientes || 0}</span>
+            </div>
+            {data.TotalVencidas > 0 && (
+              <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 rounded border border-red-200">
+                <span className="font-medium text-red-700">Vencidas</span>
+                <span className="text-3xl font-bold text-red-600">{data.TotalVencidas}</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderWidgetTareasPendientesPropiosBandejasGrupal = (widget: WidgetData) => {
+    const data = widget.tareasData || {};
+    
+    return (
+      <Card key={widget.config.Id}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-blue-600" />
+            <CardTitle className="text-lg">Tareas en Mis Bandejas</CardTitle>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Todas las bandejas grupales
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
+              <span className="font-medium">Total Pendientes</span>
+              <span className="text-2xl font-bold text-blue-600">{data.TotalPendientes || 0}</span>
+            </div>
+            <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded">
+              <span className="font-medium">Tomadas por mí</span>
+              <span className="text-2xl font-bold text-green-600">{data.TomadasPorMi || 0}</span>
+            </div>
+            {data.TotalVencidas > 0 && (
+              <div className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-200">
+                <span className="font-medium text-red-700">Vencidas</span>
+                <span className="text-2xl font-bold text-red-600">{data.TotalVencidas}</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderWidgetTareasPendientesTotalesBandejaPersonal = (widget: WidgetData) => {
+    const data = widget.tareasData || [];
+    
+    return (
+      <Card key={widget.config.Id} className="col-span-full">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-purple-600" />
+            <CardTitle className="text-lg">Tareas Pendientes por Usuario</CardTitle>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Bandejas personales
+          </p>
+        </CardHeader>
+        <CardContent>
+          {data.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100 dark:bg-gray-800">
+                  <tr>
+                    <th className="p-2 text-left">Usuario</th>
+                    <th className="p-2 text-left">Nombre</th>
+                    <th className="p-2 text-center">Pendientes</th>
+                    <th className="p-2 text-center">Vencidas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.slice(0, 10).map((row: any, index: number) => (
+                    <tr key={index} className="border-b dark:border-gray-700">
+                      <td className="p-2">{row.Usuario}</td>
+                      <td className="p-2">{row.NombreCompleto}</td>
+                      <td className="p-2 text-center">
+                        <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full font-semibold">
+                          {row.TotalPendientes}
+                        </span>
+                      </td>
+                      <td className="p-2 text-center">
+                        {row.TotalVencidas > 0 ? (
+                          <span className="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full font-semibold">
+                            {row.TotalVencidas}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-center text-gray-500 py-4">No hay datos disponibles</p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderWidgetTareasPendientesTotalesBandejasGrupal = (widget: WidgetData) => {
+    const data = widget.tareasData || [];
+    
+    return (
+      <Card key={widget.config.Id} className="col-span-full">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Folder className="h-5 w-5 text-indigo-600" />
+            <CardTitle className="text-lg">Tareas Pendientes por Bandeja</CardTitle>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Bandejas grupales
+          </p>
+        </CardHeader>
+        <CardContent>
+          {data.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100 dark:bg-gray-800">
+                  <tr>
+                    <th className="p-2 text-left">Bandeja</th>
+                    <th className="p-2 text-center">Pendientes</th>
+                    <th className="p-2 text-center">Tomadas</th>
+                    <th className="p-2 text-center">Vencidas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.slice(0, 10).map((row: any, index: number) => (
+                    <tr key={index} className="border-b dark:border-gray-700">
+                      <td className="p-2 font-medium">{row.BandejaNombre}</td>
+                      <td className="p-2 text-center">
+                        <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full font-semibold">
+                          {row.TotalPendientes}
+                        </span>
+                      </td>
+                      <td className="p-2 text-center">
+                        <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full font-semibold">
+                          {row.TotalTomadas}
+                        </span>
+                      </td>
+                      <td className="p-2 text-center">
+                        {row.TotalVencidas > 0 ? (
+                          <span className="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full font-semibold">
+                            {row.TotalVencidas}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-center text-gray-500 py-4">No hay datos disponibles</p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -405,14 +634,35 @@ return (
 
     {widgetsData.length > 0 ? (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {widgetsData.map((widget) => {
-          if (widget.config.TipoVisualizacion === "Agrupamiento") {
-            return renderWidgetAgrupamiento(widget);
-          } else if (widget.config.TipoVisualizacion === "DetalleFiltrado") {
-            return renderWidgetDetalleFiltrado(widget);
-          } else if (widget.config.TipoVisualizacion === "Totalizado") {
-            return renderWidgetTotalizado(widget);
+        {widgetsData.map((widget, idx) => {
+          console.log(`🎨 Renderizando widget ${idx}:`, widget.config.Tipo, widget);
+          
+          // Widgets de Módulos
+          if (widget.config.Tipo === "Modulos" || !widget.config.Tipo) {
+            if (widget.config.TipoVisualizacion === "Agrupamiento") {
+              return renderWidgetAgrupamiento(widget);
+            } else if (widget.config.TipoVisualizacion === "DetalleFiltrado") {
+              return renderWidgetDetalleFiltrado(widget);
+            } else if (widget.config.TipoVisualizacion === "Totalizado") {
+              return renderWidgetTotalizado(widget);
+            }
           }
+          // Widgets de Tareas
+          else if (widget.config.Tipo === "Tareas") {
+            console.log(`🎨 Widget de Tareas detectado: ${widget.config.TareasTipoVisualizacion} - ${widget.config.TareasCategoria}`);
+            
+            if (widget.config.TareasTipoVisualizacion === "PendientesPropios" && widget.config.TareasCategoria === "BandejaPersonal") {
+              return renderWidgetTareasPendientesPropiosBandejaPersonal(widget);
+            } else if (widget.config.TareasTipoVisualizacion === "PendientesPropios" && widget.config.TareasCategoria === "BandejasGrupal") {
+              return renderWidgetTareasPendientesPropiosBandejasGrupal(widget);
+            } else if (widget.config.TareasTipoVisualizacion === "PendientesTotales" && widget.config.TareasCategoria === "BandejaPersonal") {
+              return renderWidgetTareasPendientesTotalesBandejaPersonal(widget);
+            } else if (widget.config.TareasTipoVisualizacion === "PendientesTotales" && widget.config.TareasCategoria === "BandejasGrupal") {
+              return renderWidgetTareasPendientesTotalesBandejasGrupal(widget);
+            }
+          }
+          
+          console.log(`⚠️ Widget ${idx} no coincide con ninguna condición de renderizado`);
           return null;
         })}
       </div>
