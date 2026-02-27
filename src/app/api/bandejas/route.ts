@@ -22,6 +22,27 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
+    const soloActivas = searchParams.get("soloActivas");
+
+    // Si piden solo bandejas activas (para asignación de tareas)
+    if (soloActivas === "true") {
+      const result = await query(
+        `SELECT 
+           Id as BandejaId,
+           Nombre as NombreBandeja,
+           Descripcion as DescripcionBandeja,
+           Estado as EstadoBandeja
+         FROM TD_BANDEJAS
+         WHERE Estado = 'Activa'
+         ORDER BY Nombre`,
+        {}
+      );
+
+      return NextResponse.json<ApiResponse>({
+        success: true,
+        data: result,
+      });
+    }
 
     // Si piden una bandeja específica
     if (id) {

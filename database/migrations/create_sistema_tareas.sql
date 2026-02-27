@@ -150,7 +150,7 @@ BEGIN
         [Observaciones] VARCHAR(MAX),
         [FechaCreacion] DATETIME DEFAULT GETDATE(),
         [FechaVencimiento] DATETIME NULL,
-        [Estado] VARCHAR(20) DEFAULT 'Pendiente' CHECK ([Estado] IN ('Pendiente', 'Tomada', 'Finalizada', 'Rechazada')),
+        [Estado] VARCHAR(20) DEFAULT 'Pendiente' CHECK ([Estado] IN ('Pendiente', 'Tomada', 'Completada', 'Rechazada')),
         
         -- Asignación: puede ser a Usuario o a Bandeja
         [TipoAsignacion] VARCHAR(20) NOT NULL CHECK ([TipoAsignacion] IN ('Usuario', 'Bandeja')),
@@ -163,7 +163,7 @@ BEGIN
         
         -- Auditoría
         [UsuarioCreacion] VARCHAR(100),
-        [FechaFinalizacion] DATETIME NULL,
+        [FechaCompletado] DATETIME NULL,
         [FechaRechazo] DATETIME NULL,
         
         CONSTRAINT FK_TD_TAREAS_PlantillaTarea 
@@ -221,10 +221,10 @@ BEGIN
         [TareaId] INT NOT NULL,
         [ModuloId] INT NOT NULL,
         [RegistroId] INT NOT NULL,
-        [Estado] VARCHAR(20) DEFAULT 'Pendiente' CHECK ([Estado] IN ('Pendiente', 'Finalizada', 'Rechazada')),
+        [Estado] VARCHAR(20) DEFAULT 'Pendiente' CHECK ([Estado] IN ('Pendiente', 'Completada', 'Rechazada')),
         [Observaciones] VARCHAR(MAX),
         [FechaCreacion] DATETIME DEFAULT GETDATE(),
-        [FechaFinalizacion] DATETIME NULL,
+        [FechaCompletado] DATETIME NULL,
         
         CONSTRAINT FK_TR_TAREA_REGISTRO_Tarea 
             FOREIGN KEY ([TareaId]) 
@@ -261,7 +261,7 @@ BEGIN
         [TareaId] INT NOT NULL,
         [UsuarioId] INT NOT NULL,
         [Usuario] VARCHAR(100) NOT NULL,
-        [Accion] VARCHAR(50) NOT NULL CHECK ([Accion] IN ('Crear', 'Tomar', 'Finalizar', 'Rechazar', 'Reasignar', 'Comentar', 'ActualizarRegistro')),
+        [Accion] VARCHAR(50) NOT NULL CHECK ([Accion] IN ('Crear', 'Tomar', 'Completar', 'Rechazar', 'Reasignar', 'Comentar', 'ActualizarRegistro')),
         [Detalle] VARCHAR(MAX),
         [FechaHora] DATETIME DEFAULT GETDATE(),
         

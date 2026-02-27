@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
@@ -43,10 +43,15 @@ interface ModuloAsociacion extends Modulo {
 export default function DetalleRegistroV2Page() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const moduloId = params.id as string;
   const registroId = params.registroId as string;
   const { toast } = useToast();
   const confirm = useConfirm();
+
+  // Parámetros de retorno para navegación
+  const returnTo = searchParams.get('returnTo');
+  const returnId = searchParams.get('returnId');
 
   const [modulo, setModulo] = useState<Modulo | null>(null);
   const [registro, setRegistro] = useState<any>(null);
@@ -1050,7 +1055,14 @@ export default function DetalleRegistroV2Page() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.back()}
+            onClick={() => {
+              // Si viene de una tarea, regresar a ella
+              if (returnTo === 'tarea' && returnId) {
+                router.push(`/dashboard/tarea/${returnId}`);
+              } else {
+                router.back();
+              }
+            }}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>

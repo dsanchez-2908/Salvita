@@ -109,7 +109,7 @@ export default function MisTareasPage() {
         return <Clock className="h-5 w-5 text-yellow-500" />;
       case "Tomada":
         return <AlertCircle className="h-5 w-5 text-blue-500" />;
-      case "Finalizada":
+      case "Completada":
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case "Rechazada":
         return <XCircle className="h-5 w-5 text-red-500" />;
@@ -125,7 +125,7 @@ export default function MisTareasPage() {
         return `${baseClasses} bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200`;
       case "Tomada":
         return `${baseClasses} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`;
-      case "Finalizada":
+      case "Completada":
         return `${baseClasses} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200`;
       case "Rechazada":
         return `${baseClasses} bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200`;
@@ -144,7 +144,7 @@ export default function MisTareasPage() {
   };
 
   const esVencida = (fechaVencimiento: string | null, estado: string) => {
-    if (!fechaVencimiento || estado === "Finalizada" || estado === "Rechazada")
+    if (!fechaVencimiento || estado === "Completada" || estado === "Rechazada")
       return false;
     return new Date(fechaVencimiento) < new Date();
   };
@@ -191,7 +191,7 @@ export default function MisTareasPage() {
 
           {/* Filtro por estado */}
           <div className="flex gap-2 flex-wrap">
-            {["Todas", "Pendiente", "Tomada", "Finalizada", "Rechazada"].map(
+            {["Todas", "Pendiente", "Tomada", "Completada", "Rechazada"].map(
               (estado) => (
                 <Button
                   key={estado}

@@ -57,7 +57,7 @@ interface Tarea {
   UsuarioTomadaPorId?: number;
   TomoNombre?: string;
   FechaTomada?: string;
-  FechaFinalizacion?: string;
+  FechaCompletado?: string;
   FechaRechazo?: string;
   ModuloId?: number;
   ModuloNombre?: string;
@@ -132,10 +132,10 @@ export default function TareaDetallePage() {
   const [activeTab, setActiveTab] = useState("informacion");
 
   // Estados para diálogos
-  const [showFinalizarDialog, setShowFinalizarDialog] = useState(false);
+  const [showCompletarDialog, setShowCompletarDialog] = useState(false);
   const [showRechazarDialog, setShowRechazarDialog] = useState(false);
   const [showReasignarDialog, setShowReasignarDialog] = useState(false);
-  const [comentarioFinalizar, setComentarioFinalizar] = useState("");
+  const [comentarioCompletar, setComentarioCompletar] = useState("");
   const [motivoRechazo, setMotivoRechazo] = useState("");
   const [nuevoComentario, setNuevoComentario] = useState("");
   const [procesando, setProcesando] = useState(false);
@@ -328,30 +328,30 @@ export default function TareaDetallePage() {
     }
   };
 
-  const handleFinalizarTarea = async () => {
+  const handleCompletarTarea = async () => {
     try {
       setProcesando(true);
       const token = localStorage.getItem("token");
-      const response = await fetch(`/api/tareas/${tareaId}/finalizar`, {
+      const response = await fetch(`/api/tareas/${tareaId}/completar`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ comentario: comentarioFinalizar }),
+        body: JSON.stringify({ comentario: comentarioCompletar }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || error.message || "Error al finalizar la tarea");
+        throw new Error(error.error || error.message || "Error al completar la tarea");
       }
 
       toast({
         title: "Éxito",
-        description: "Tarea finalizada exitosamente",
+        description: "Tarea completada exitosamente",
       });
-      setShowFinalizarDialog(false);
-      setComentarioFinalizar("");
+      setShowCompletarDialog(false);
+      setComentarioCompletar("");
       await cargarTarea();
       await cargarHistorial();
     } catch (err: any) {
@@ -562,7 +562,7 @@ export default function TareaDetallePage() {
     const badges = {
       Pendiente: { variant: "secondary" as const, icon: Clock, color: "text-yellow-600" },
       Tomada: { variant: "default" as const, icon: AlertCircle, color: "text-blue-600" },
-      Finalizada: { variant: "default" as const, icon: CheckCircle, color: "text-green-600" },
+      Completada: { variant: "default" as const, icon: CheckCircle, color: "text-green-600" },
       Rechazada: { variant: "destructive" as const, icon: XCircle, color: "text-red-600" },
     };
 
@@ -583,7 +583,7 @@ export default function TareaDetallePage() {
         return <FileText className="h-4 w-4 text-blue-600" />;
       case "Tomar":
         return <User className="h-4 w-4 text-purple-600" />;
-      case "Finalizar":
+      case "Completar":
         return <CheckCircle className="h-4 w-4 text-green-600" />;
       case "Rechazar":
         return <XCircle className="h-4 w-4 text-red-600" />;
@@ -713,10 +713,10 @@ export default function TareaDetallePage() {
                     <p className="font-medium">{formatearFecha(tarea.FechaTomada)}</p>
                   </div>
                 )}
-                {tarea.FechaFinalizacion && (
+                {tarea.FechaCompletado && (
                   <div>
-                    <Label className="text-muted-foreground">Fecha finalización</Label>
-                    <p className="font-medium">{formatearFecha(tarea.FechaFinalizacion)}</p>
+                    <Label className="text-muted-foreground">Fecha completado</Label>
+                    <p className="font-medium">{formatearFecha(tarea.FechaCompletado)}</p>
                   </div>
                 )}
                 {tarea.FechaRechazo && (
@@ -812,7 +812,14 @@ export default function TareaDetallePage() {
                       {registros.map((registro) => {
                         const datosRegistro = datosRegistros.find((d) => d.Id === registro.RegistroId);
                         return (
-                          <tr key={registro.TareaRegistroId}>
+                          <tr 
+                            key={registro.TareaRegistroId}
+                            onClick={() => {
+                              // Navegar al detalle del registro con parámetro de retorno
+                              router.push(`/dashboard/modulos-v2/${registro.ModuloId}/${registro.RegistroId}?returnTo=tarea&returnId=${tareaId}`);
+                            }}
+                            className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                          >
                             {camposModulo.map((campo) => {
                               let valor = datosRegistro ? datosRegistro[campo.NombreColumna] : null;
                               
@@ -863,14 +870,15 @@ export default function TareaDetallePage() {
                                   e.target.value, 
                                   registro.ObservacionesRegistro || ''
                                 )}
+                                onClick={(e) => e.stopPropagation()}
                                 className="text-sm border rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600"
                               >
                                 <option value="Pendiente">Pendiente</option>
-                                <option value="Finalizada">Finalizada</option>
+                                <option value="Completada">Completada</option>
                                 <option value="Rechazada">Rechazada</option>
                               </select>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                               <Input
                                 type="text"
                                 value={registro.ObservacionesRegistro || ''}
@@ -1009,16 +1017,16 @@ export default function TareaDetallePage() {
               </Button>
             )}
             
-            {/* Botones Finalizar/Rechazar: para tareas Tomadas O para tareas de Usuario en Pendiente */}
+            {/* Botones Completar/Rechazar: para tareas Tomadas O para tareas de Usuario en Pendiente */}
             {(tarea.Estado === "Tomada" || (tarea.Estado === "Pendiente" && tarea.TipoAsignacion === "Usuario")) && (
               <>
                 <Button 
-                  onClick={() => setShowFinalizarDialog(true)} 
+                  onClick={() => setShowCompletarDialog(true)} 
                   disabled={procesando}
                   className="bg-green-600 hover:bg-green-700"
                 >
                   <CheckCircle className="mr-2 h-4 w-4" />
-                  Finalizar
+                  Completar
                 </Button>
                 <Button 
                   onClick={() => setShowRechazarDialog(true)} 
@@ -1031,8 +1039,8 @@ export default function TareaDetallePage() {
               </>
             )}
             
-            {/* Botón Reasignar: disponible si no está Finalizada o Rechazada */}
-            {tarea.Estado !== "Finalizada" && tarea.Estado !== "Rechazada" && (
+            {/* Botón Reasignar: disponible si no está Completada o Rechazada */}
+            {tarea.Estado !== "Completada" && tarea.Estado !== "Rechazada" && (
               <Button 
                 onClick={abrirDialogReasignar} 
                 disabled={procesando}
@@ -1046,23 +1054,23 @@ export default function TareaDetallePage() {
         </CardContent>
       </Card>
 
-      {/* Dialog: Finalizar Tarea */}
-      <Dialog open={showFinalizarDialog} onOpenChange={setShowFinalizarDialog}>
+      {/* Dialog: Completar Tarea */}
+      <Dialog open={showCompletarDialog} onOpenChange={setShowCompletarDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Finalizar Tarea</DialogTitle>
+            <DialogTitle>Completar Tarea</DialogTitle>
             <DialogDescription>
-              ¿Estás seguro de que deseas marcar esta tarea como finalizada?
+              ¿Estás seguro de que deseas marcar esta tarea como completada?
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="comentario-finalizar">Comentario (opcional)</Label>
+              <Label htmlFor="comentario-completar">Comentario (opcional)</Label>
               <Textarea
-                id="comentario-finalizar"
-                placeholder="Agrega un comentario sobre la finalización..."
-                value={comentarioFinalizar}
-                onChange={(e) => setComentarioFinalizar(e.target.value)}
+                id="comentario-completar"
+                placeholder="Agrega un comentario sobre la completación..."
+                value={comentarioCompletar}
+                onChange={(e) => setComentarioCompletar(e.target.value)}
                 rows={3}
               />
             </div>
@@ -1070,18 +1078,18 @@ export default function TareaDetallePage() {
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() => setShowFinalizarDialog(false)}
+              onClick={() => setShowCompletarDialog(false)}
               disabled={procesando}
             >
               Cancelar
             </Button>
             <Button 
-              onClick={handleFinalizarTarea}
+              onClick={handleCompletarTarea}
               disabled={procesando}
               className="bg-green-600 hover:bg-green-700"
             >
               <CheckCircle className="mr-2 h-4 w-4" />
-              Finalizar Tarea
+              Completar Tarea
             </Button>
           </DialogFooter>
         </DialogContent>

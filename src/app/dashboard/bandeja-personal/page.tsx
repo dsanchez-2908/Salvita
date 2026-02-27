@@ -24,7 +24,7 @@ interface Tarea {
   CreadoPorNombre: string;
 }
 
-type EstadoFiltro = "Todas" | "Pendiente" | "Tomada" | "Finalizada" | "Rechazada";
+type EstadoFiltro = "Todas" | "Pendiente" | "Tomada" | "Completada" | "Rechazada";
 
 export default function BandejaPersonalPage() {
   const router = useRouter();
@@ -104,7 +104,7 @@ export default function BandejaPersonalPage() {
         return <Clock className="h-5 w-5 text-yellow-500" />;
       case "Tomada":
         return <AlertCircle className="h-5 w-5 text-blue-500" />;
-      case "Finalizada":
+      case "Completada":
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case "Rechazada":
         return <XCircle className="h-5 w-5 text-red-500" />;
@@ -120,7 +120,7 @@ export default function BandejaPersonalPage() {
         return `${baseClasses} bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200`;
       case "Tomada":
         return `${baseClasses} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`;
-      case "Finalizada":
+      case "Completada":
         return `${baseClasses} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200`;
       case "Rechazada":
         return `${baseClasses} bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200`;
@@ -213,7 +213,7 @@ export default function BandejaPersonalPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {(["Todas", "Pendiente", "Tomada", "Finalizada", "Rechazada"] as EstadoFiltro[]).map((estado) => (
+            {(["Todas", "Pendiente", "Tomada", "Completada", "Rechazada"] as EstadoFiltro[]).map((estado) => (
               <Button
                 key={estado}
                 variant={estadoFiltro === estado ? "default" : "outline"}

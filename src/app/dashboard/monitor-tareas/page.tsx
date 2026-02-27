@@ -24,13 +24,13 @@ interface EstadisticasGenerales {
   Total: number;
   Pendientes: number;
   Tomadas: number;
-  Finalizadas: number;
+  Completadas: number;
   Rechazadas: number;
   Vencidas: number;
 }
 
 interface TiempoPromedio {
-  PromedioFinalizadas: number;
+  PromedioCompletadas: number;
   PromedioTomada: number;
 }
 
@@ -40,7 +40,7 @@ interface TareaPorUsuario {
   TotalTareas: number;
   Pendientes: number;
   Tomadas: number;
-  Finalizadas: number;
+  Completadas: number;
   Rechazadas: number;
 }
 
@@ -50,7 +50,7 @@ interface TareaPorBandeja {
   TotalTareas: number;
   Pendientes: number;
   Tomadas: number;
-  Finalizadas: number;
+  Completadas: number;
   Rechazadas: number;
 }
 
@@ -58,7 +58,7 @@ interface TareaPorPlantilla {
   PlantillaId: number;
   PlantillaNombre: string;
   TotalTareas: number;
-  Finalizadas: number;
+  Completadas: number;
   Rechazadas: number;
 }
 
@@ -70,14 +70,14 @@ interface TareaPorDia {
 interface TopUsuario {
   UsuarioId: number;
   UsuarioNombre: string;
-  TareasFinalizadas: number;
+  TareasCompletadas: number;
   PromedioHoras: number;
 }
 
 interface EficienciaTipo {
   TipoAsignacion: string;
   Total: number;
-  Finalizadas: number;
+  Completadas: number;
   PorcentajeExito: number;
 }
 
@@ -261,13 +261,13 @@ export default function MonitorTareasPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Finalizadas</CardTitle>
+            <CardTitle className="text-sm font-medium">Completadas</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{general.Finalizadas}</div>
+            <div className="text-2xl font-bold text-green-600">{general.Completadas}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {calcularPorcentaje(general.Finalizadas, general.Total)}% del total
+              {calcularPorcentaje(general.Completadas, general.Total)}% del total
             </p>
           </CardContent>
         </Card>
@@ -311,10 +311,10 @@ export default function MonitorTareasPage() {
           <CardContent>
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-muted-foreground">Desde creación hasta finalización</p>
+                <p className="text-sm text-muted-foreground">Desde creación hasta completado</p>
                 <p className="text-3xl font-bold">
-                  {tiempoPromedio.PromedioFinalizadas 
-                    ? `${tiempoPromedio.PromedioFinalizadas.toFixed(1)} días`
+                  {tiempoPromedio.PromedioCompletadas 
+                    ? `${tiempoPromedio.PromedioCompletadas.toFixed(1)} días`
                     : "N/A"}
                 </p>
               </div>
@@ -352,7 +352,7 @@ export default function MonitorTareasPage() {
                     ></div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {eficiencia.Finalizadas} de {eficiencia.Total} tareas
+                    {eficiencia.Completadas} de {eficiencia.Total} tareas
                   </p>
                 </div>
               ))}
@@ -386,7 +386,7 @@ export default function MonitorTareasPage() {
                     <th className="text-right p-2">Total</th>
                     <th className="text-right p-2">Pendientes</th>
                     <th className="text-right p-2">Tomadas</th>
-                    <th className="text-right p-2">Finalizadas</th>
+                    <th className="text-right p-2">Completadas</th>
                     <th className="text-right p-2">Rechazadas</th>
                   </tr>
                 </thead>
@@ -397,7 +397,7 @@ export default function MonitorTareasPage() {
                       <td className="text-right p-2">{usuario.TotalTareas}</td>
                       <td className="text-right p-2 text-yellow-600">{usuario.Pendientes}</td>
                       <td className="text-right p-2 text-blue-600">{usuario.Tomadas}</td>
-                      <td className="text-right p-2 text-green-600">{usuario.Finalizadas}</td>
+                      <td className="text-right p-2 text-green-600">{usuario.Completadas}</td>
                       <td className="text-right p-2 text-red-600">{usuario.Rechazadas}</td>
                     </tr>
                   ))}
@@ -433,7 +433,7 @@ export default function MonitorTareasPage() {
                     <th className="text-right p-2">Total</th>
                     <th className="text-right p-2">Pendientes</th>
                     <th className="text-right p-2">Tomadas</th>
-                    <th className="text-right p-2">Finalizadas</th>
+                    <th className="text-right p-2">Completadas</th>
                     <th className="text-right p-2">Rechazadas</th>
                   </tr>
                 </thead>
@@ -444,7 +444,7 @@ export default function MonitorTareasPage() {
                       <td className="text-right p-2">{bandeja.TotalTareas}</td>
                       <td className="text-right p-2 text-yellow-600">{bandeja.Pendientes}</td>
                       <td className="text-right p-2 text-blue-600">{bandeja.Tomadas}</td>
-                      <td className="text-right p-2 text-green-600">{bandeja.Finalizadas}</td>
+                      <td className="text-right p-2 text-green-600">{bandeja.Completadas}</td>
                       <td className="text-right p-2 text-red-600">{bandeja.Rechazadas}</td>
                     </tr>
                   ))}
@@ -483,7 +483,7 @@ export default function MonitorTareasPage() {
                       <span className="font-medium">{usuario.UsuarioNombre}</span>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold">{usuario.TareasFinalizadas}</div>
+                      <div className="font-bold">{usuario.TareasCompletadas}</div>
                       <div className="text-xs text-muted-foreground">
                         {usuario.PromedioHoras ? `${usuario.PromedioHoras.toFixed(1)}h promedio` : 'N/A'}
                       </div>
@@ -524,12 +524,12 @@ export default function MonitorTareasPage() {
                       <div 
                         className="bg-green-600 h-2 rounded-full"
                         style={{ 
-                          width: `${calcularPorcentaje(plantilla.Finalizadas, plantilla.TotalTareas)}%` 
+                          width: `${calcularPorcentaje(plantilla.Completadas, plantilla.TotalTareas)}%` 
                         }}
                       ></div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {plantilla.Finalizadas} finalizadas, {plantilla.Rechazadas} rechazadas
+                      {plantilla.Completadas} completadas, {plantilla.Rechazadas} rechazadas
                     </p>
                   </div>
                 ))}

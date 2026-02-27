@@ -70,6 +70,7 @@ export default function CrearTareaPage() {
   const [tipoAsignacion, setTipoAsignacion] = useState<"Usuario" | "Bandeja">("Bandeja");
   const [usuarioAsignadoId, setUsuarioAsignadoId] = useState<number | null>(null);
   const [bandejaAsignadaId, setBandejaAsignadaId] = useState<number | null>(null);
+  const [multipleTareas, setMultipleTareas] = useState(false); // false = una tarea por registro, true = una tarea con todos los registros
   
   const [loading, setLoading] = useState(true);
   const [creando, setCreando] = useState(false);
@@ -217,7 +218,8 @@ export default function CrearTareaPage() {
   const cargarBandejas = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/api/bandejas/usuario", {
+      // Usar soloActivas=true para obtener TODAS las bandejas activas (no solo las del usuario)
+      const response = await fetch("/api/bandejas?soloActivas=true", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -318,8 +320,6 @@ export default function CrearTareaPage() {
       return;
     }
 
-    // Ya no es obligatorio tener registros
-
     if (tipoAsignacion === "Usuario" && !usuarioAsignadoId) {
       toast({
         title: "Error",
@@ -342,58 +342,114 @@ export default function CrearTareaPage() {
       setCreando(true);
       const token = localStorage.getItem("token");
 
-      const payload = {
-        PlantillaId: plantillaId,
-        Observaciones: observaciones,
-        FechaVencimiento: fechaVencimiento || null,
-        TipoAsignacion: tipoAsignacion,
-        UsuarioAsignadoId: tipoAsignacion === "Usuario" ? usuarioAsignadoId : null,
-        BandejaAsignadaId: tipoAsignacion === "Bandeja" ? bandejaAsignadaId : null,
-        IniciarInmediatamente: iniciar,
-      };
+      // Determinar si crear múltiples tareas individuales
+      const crearMultiplesIndividuales = !multipleTareas && registrosTemporales.length > 1;
 
-      const response = await fetch("/api/tareas", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+      if (crearMultiplesIndividuales) {
+        // MODO: Una tarea por cada registro
+        const payload = {
+          PlantillaId: plantillaId,
+          Observaciones: observaciones,
+          FechaVencimiento: fechaVencimiento || null,
+          TipoAsignacion: tipoAsignacion,
+          UsuarioAsignadoId: tipoAsignacion === "Usuario" ? usuarioAsignadoId : null,
+          BandejaAsignadaId: tipoAsignacion === "Bandeja" ? bandejaAsignadaId : null,
+          IniciarInmediatamente: iniciar,
+          CrearTareasPorRegistro: true, // Flag para el API
+        };
 
-      const data = await response.json();
-
-      if (data.success) {
-        toast({
-          title: "Éxito",
-          description: iniciar 
-            ? "Tarea creada e iniciada exitosamente" 
-            : "Tarea creada exitosamente",
+        const response = await fetch("/api/tareas", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
         });
 
-        // Limpiar registros temporales
-        await fetch("/api/tareas/temporal?limpiar=true", {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const data = await response.json();
 
-        // Disparar evento para actualizar contador
-        window.dispatchEvent(new CustomEvent("registrosTemporalesActualizados"));
+        if (data.success) {
+          const cantidadCreadas = data.tareasCreadas || registrosTemporales.length;
+          toast({
+            title: "Éxito",
+            description: `${cantidadCreadas} tareas creadas exitosamente`,
+          });
 
-        // Redirigir al dashboard (temporalmente hasta que se implemente la página de detalle)
-        router.push("/dashboard");
+          // Limpiar registros temporales
+          await fetch("/api/tareas/temporal?limpiar=true", {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          // Disparar evento para actualizar contador
+          window.dispatchEvent(new CustomEvent("registrosTemporalesActualizados"));
+
+          // Redirigir al dashboard
+          router.push("/dashboard");
+        } else {
+          toast({
+            title: "Error",
+            description: data.error || "Error al crear las tareas",
+            variant: "destructive",
+          });
+        }
       } else {
-        toast({
-          title: "Error",
-          description: data.error || "Error al crear la tarea",
-          variant: "destructive",
+        // MODO: Una sola tarea con todos los registros (comportamiento original)
+        const payload = {
+          PlantillaId: plantillaId,
+          Observaciones: observaciones,
+          FechaVencimiento: fechaVencimiento || null,
+          TipoAsignacion: tipoAsignacion,
+          UsuarioAsignadoId: tipoAsignacion === "Usuario" ? usuarioAsignadoId : null,
+          BandejaAsignadaId: tipoAsignacion === "Bandeja" ? bandejaAsignadaId : null,
+          IniciarInmediatamente: iniciar,
+          CrearTareasPorRegistro: false,
+        };
+
+        const response = await fetch("/api/tareas", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
         });
+
+        const data = await response.json();
+
+        if (data.success) {
+          toast({
+            title: "Éxito",
+            description: iniciar 
+              ? "Tarea creada e iniciada exitosamente" 
+              : "Tarea creada exitosamente",
+          });
+
+          // Limpiar registros temporales
+          await fetch("/api/tareas/temporal?limpiar=true", {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          // Disparar evento para actualizar contador
+          window.dispatchEvent(new CustomEvent("registrosTemporalesActualizados"));
+
+          // Redirigir al dashboard
+          router.push("/dashboard");
+        } else {
+          toast({
+            title: "Error",
+            description: data.error || "Error al crear la tarea",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error("Error:", error);
       toast({
         title: "Error",
-        description: "Error al crear la tarea",
+        description: "Error al crear la(s) tarea(s)",
         variant: "destructive",
       });
     } finally {
@@ -661,6 +717,37 @@ export default function CrearTareaPage() {
               className="mt-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
+
+          {/* Checkbox Múltiples Tareas (solo visible si hay registros) */}
+          {registrosTemporales.length > 1 && (
+            <div className="md:col-span-2">
+              <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <input
+                  type="checkbox"
+                  id="multipleTareas"
+                  checked={multipleTareas}
+                  onChange={(e) => setMultipleTareas(e.target.checked)}
+                  className="w-5 h-5 mt-0.5 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <div className="flex-1">
+                  <Label htmlFor="multipleTareas" className="text-gray-900 dark:text-white font-semibold cursor-pointer">
+                    Múltiples Tareas
+                  </Label>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {multipleTareas ? (
+                      <>
+                        <strong>Activado:</strong> Se creará UNA SOLA tarea con todos los {registrosTemporales.length} registros.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Desactivado:</strong> Se crearán {registrosTemporales.length} tareas independientes, una por cada registro.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Botones de Acción */}

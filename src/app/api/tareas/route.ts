@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const bandejaId = searchParams.get("bandejaId");
-    const estado = searchParams.get("estado"); // Pendiente, Tomada, Finalizada, Rechazada
+    const estado = searchParams.get("estado"); // Pendiente, Tomada, Completada, Rechazada
     const tipoAsignacion = searchParams.get("tipoAsignacion"); // Usuario, Bandeja
 
     let sql = `
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
         t.Observaciones,
         t.UsuarioTomadaPorId as TomoId,
         t.FechaTomada as FechaTomo,
-        t.FechaFinalizacion,
+        t.FechaCompletado,
         t.FechaRechazo,
         t.UsuarioCreacion as CreadoPorNombre,
         pt.Nombre as PlantillaNombre,
@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
       UsuarioAsignadoId,
       BandejaAsignadaId,
       IniciarInmediatamente,
+      CrearTareasPorRegistro, // true = una tarea por registro, false = una tarea con todos
     } = body;
 
     // Validaciones
@@ -160,11 +161,9 @@ export async function POST(request: NextRequest) {
       { userId: user.userId }
     );
 
-    // Permitir crear tareas sin registros
-    let moduloId = null;
-    
+    // Validar que todos sean del mismo módulo (si hay registros)
+    let moduloId: number | null = null;
     if (registrosTemporales.length > 0) {
-      // Validar que todos sean del mismo módulo
       moduloId = registrosTemporales[0].ModuloId;
       const todosMismoModulo = registrosTemporales.every(
         (r: any) => r.ModuloId === moduloId
@@ -178,7 +177,122 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Crear la tarea
+    // MODO 1: Crear una tarea por cada registro
+    if (CrearTareasPorRegistro && registrosTemporales.length > 1) {
+      const tareasCreadas = [];
+
+      for (const registro of registrosTemporales) {
+        // Crear la tarea
+        const insertTareaResult = await execute(
+          `
+          INSERT INTO TD_TAREAS (
+            PlantillaTareaId,
+            TipoAsignacion,
+            UsuarioAsignadoId,
+            BandejaAsignadaId,
+            Estado,
+            Observaciones,
+            FechaVencimiento,
+            UsuarioCreacion,
+            FechaCreacion
+          )
+          OUTPUT INSERTED.Id
+          VALUES (
+            @plantillaTareaId, @tipoAsignacion,
+            @usuarioAsignadoId, @bandejaAsignadaId,
+            @estado, @observaciones, @fechaVencimiento,
+            @usuarioCreacion, GETDATE()
+          )
+          `,
+          {
+            plantillaTareaId: PlantillaId,
+            tipoAsignacion: TipoAsignacion,
+            usuarioAsignadoId: TipoAsignacion === "Usuario" ? UsuarioAsignadoId : null,
+            bandejaAsignadaId: TipoAsignacion === "Bandeja" ? BandejaAsignadaId : null,
+            estado: IniciarInmediatamente && TipoAsignacion === "Usuario" ? "Tomada" : "Pendiente",
+            observaciones: Observaciones || null,
+            fechaVencimiento: FechaVencimiento || null,
+            usuarioCreacion: user.nombre,
+          }
+        );
+
+        const tareaId = insertTareaResult.recordset[0].Id;
+        tareasCreadas.push(tareaId);
+
+        // Vincular solo este registro a la tarea
+        await query(
+          `
+          INSERT INTO TR_TAREA_REGISTRO (TareaId, ModuloId, RegistroId)
+          VALUES (@tareaId, @moduloId, @registroId)
+          `,
+          {
+            tareaId: tareaId,
+            moduloId: registro.ModuloId,
+            registroId: registro.RegistroId,
+          }
+        );
+
+        // Si se inicia inmediatamente
+        if (IniciarInmediatamente && TipoAsignacion === "Usuario") {
+          await query(
+            `
+            UPDATE TD_TAREAS 
+            SET UsuarioTomadaPorId = @userId, FechaTomada = GETDATE()
+            WHERE Id = @tareaId
+            `,
+            {
+              userId: user.userId,
+              tareaId: tareaId,
+            }
+          );
+
+          await query(
+            `
+            INSERT INTO TD_TAREA_HISTORIAL (
+              TareaId, UsuarioId, Usuario, Accion, Detalle, FechaHora
+            )
+            VALUES (@tareaId, @userId, @usuario, 'Tomar', 'Tarea iniciada automáticamente al crear', GETDATE())
+            `,
+            {
+              tareaId: tareaId,
+              userId: user.userId,
+              usuario: user.nombre,
+            }
+          );
+        }
+
+        // Registrar en historial la creación
+        await query(
+          `
+          INSERT INTO TD_TAREA_HISTORIAL (
+            TareaId, UsuarioId, Usuario, Accion, Detalle, FechaHora
+          )
+          VALUES (@tareaId, @userId, @usuario, 'Crear', @detalle, GETDATE())
+          `,
+          {
+            tareaId: tareaId,
+            userId: user.userId,
+            usuario: user.nombre,
+            detalle: 'Tarea creada con 1 registro',
+          }
+        );
+      }
+
+      // Limpiar registros temporales del usuario
+      await query(
+        `DELETE FROM TR_TAREA_TEMPORAL_REGISTROS WHERE UsuarioId = @userId`,
+        { userId: user.userId }
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: `${tareasCreadas.length} tareas creadas exitosamente`,
+        tareasCreadas: tareasCreadas.length,
+        TareaIds: tareasCreadas,
+      });
+    }
+
+    // MODO 2: Crear una sola tarea con todos los registros (comportamiento original)
     const insertTareaResult = await execute(
       `
       INSERT INTO TD_TAREAS (
