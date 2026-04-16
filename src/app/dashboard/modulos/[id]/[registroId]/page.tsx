@@ -133,7 +133,7 @@ export default function DetalleRegistroPage() {
           
           // Solo incluir módulos secundarios a los que el usuario tiene permiso de Ver
           modulosSecFiltrados = modulosSecFiltrados.filter((modSec: any) => {
-            const permiso = permisosMap.get(modSec.Id);
+            const permiso: any = permisosMap.get(modSec.Id);
             return permiso && permiso.PermisoVer === 1;
           });
         }
@@ -153,9 +153,9 @@ export default function DetalleRegistroPage() {
       }
 
       // Cargar valores de listas para el módulo principal
-      const listasIds = (moduloData.data.Campos || [])
+      const listasIds: number[] = (moduloData.data.Campos || [])
         .filter((c: Campo) => c.TipoDato === "Lista" && c.ListaId)
-        .map((c: Campo) => c.ListaId);
+        .map((c: Campo) => c.ListaId!);
 
       if (listasIds.length > 0) {
         await loadValoresListas([...new Set(listasIds)]);
@@ -167,9 +167,9 @@ export default function DetalleRegistroPage() {
           await loadRegistrosSecundarios(modSec.Id);
           
           // Cargar valores de listas para módulo secundario
-          const listasSecIds = (modSec.Campos || [])
+          const listasSecIds: number[] = (modSec.Campos || [])
             .filter((c: Campo) => c.TipoDato === "Lista" && c.ListaId)
-            .map((c: Campo) => c.ListaId);
+            .map((c: Campo) => c.ListaId!);
           
           if (listasSecIds.length > 0) {
             await loadValoresListas([...new Set(listasSecIds)]);
@@ -844,7 +844,7 @@ export default function DetalleRegistroPage() {
                   </div>
                   <form onSubmit={(e) => handleSubmitSecundario(e, moduloSec.Id)} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {moduloSec.Campos.filter(c => c.Visible).map((campo) => (
+                      {moduloSec.Campos.filter(c => c.Visible && c.TipoDato !== "IDInterno").map((campo) => (
                         <div key={campo.Id}>
                           <Label htmlFor={campo.Nombre} className="dark:text-gray-300">
                             {campo.Nombre}

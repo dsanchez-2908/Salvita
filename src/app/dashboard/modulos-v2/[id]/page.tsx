@@ -11,16 +11,27 @@ import { Label } from "@/components/ui/label";
 
 interface AdvancedFilter {
   id: string;
+  moduloId: number; // ID del módulo (padre o hijo) al que pertenece el campo
+  moduloNombre: string; // Nombre del módulo para mostrar
   campo: string;
   operador: "igual" | "contiene" | "noContiene" | "mayor" | "menor" | "mayorIgual" | "menorIgual" | "entre";
   valor: any;
   valorHasta?: any;
 }
 
+interface ModuloHijo {
+  Id: number;
+  Nombre: string;
+  NombreTabla: string;
+  Campos: Campo[];
+}
+
 interface CampoSistema {
   Nombre: string;
   TipoDato: string;
   Visible: boolean;
+  ListaId?: number;
+  ListaNombre?: string;
 }
 
 interface Campo {
@@ -87,6 +98,9 @@ export default function ModuloDinamicoV2Page() {
   const [registrosSeleccionados, setRegistrosSeleccionados] = useState<number[]>([]);
   const [todosSeleccionados, setTodosSeleccionados] = useState(false);
 
+  // Estado para módulos hijos con permisos
+  const [modulosHijos, setModulosHijos] = useState<ModuloHijo[]>([]);
+
   useEffect(() => {
     loadData();
     loadPermisosTareas();
@@ -119,9 +133,9 @@ export default function ModuloDinamicoV2Page() {
         setRegistrosFiltrados(data.data.registros);
 
         // Cargar valores de listas
-        const listasIds = data.data.campos
+        const listasIds: number[] = data.data.campos
           .filter((c: Campo) => c.TipoDato === "Lista" && c.ListaId)
-          .map((c: Campo) => c.ListaId);
+          .map((c: Campo) => c.ListaId!);
 
         if (listasIds.length > 0) {
           await loadValoresListas([...new Set(listasIds)]);
@@ -138,6 +152,9 @@ export default function ModuloDinamicoV2Page() {
         if (data.data.modulo.MostrarEnMenu && !initialFiltersApplied) {
           await loadAndApplyViewConfig(data.data.registros, data.data.campos);
         }
+
+        // Cargar módulos hijos con permisos
+        await loadModulosHijos();
       } else {
         toast({
           title: "Error",
@@ -171,6 +188,44 @@ export default function ModuloDinamicoV2Page() {
       }
     } catch (error) {
       console.error("Error cargando permisos:", error);
+    }
+  };
+
+  const loadModulosHijos = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      // Obtener módulos relacionados con sus campos
+      const response = await fetch(`/api/modulos-v2?id=${moduloId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json();
+      if (data.success && data.data.ModulosSecundarios) {
+        // Extraer solo módulos hijos (tipo "Hijo" en la relación)
+        const hijos: ModuloHijo[] = data.data.ModulosSecundarios.map((m: any) => ({
+          Id: m.Id,
+          Nombre: m.Nombre,
+          NombreTabla: m.NombreTabla,
+          Campos: m.Campos || [],
+        }));
+        setModulosHijos(hijos);
+
+        // Cargar valores de listas para los módulos hijos
+        const listasIdsHijos: number[] = [];
+        hijos.forEach((hijo: ModuloHijo) => {
+          hijo.Campos.forEach((campo: Campo) => {
+            if (campo.TipoDato === "Lista" && campo.ListaId) {
+              listasIdsHijos.push(campo.ListaId);
+            }
+          });
+        });
+
+        if (listasIdsHijos.length > 0) {
+          await loadValoresListas([...new Set(listasIdsHijos)]);
+        }
+      }
+    } catch (error) {
+      console.error("Error cargando módulos hijos:", error);
     }
   };
 
@@ -246,6 +301,8 @@ export default function ModuloDinamicoV2Page() {
         // Convertir filtros iniciales al formato de filtros avanzados
         const filtrosConvertidos = data.data.FiltrosIniciales.map((filtro: any) => ({
           id: `filtro-${Date.now()}-${Math.random()}`,
+          moduloId: parseInt(moduloId), // Todos los filtros iniciales son del módulo padre
+          moduloNombre: modulo?.Nombre || "",
           campo: filtro.campo,
           operador: filtro.operador === "=" ? "igual" : 
                     filtro.operador === "contiene" ? "contiene" :
@@ -262,7 +319,7 @@ export default function ModuloDinamicoV2Page() {
         setShowAdvancedSearch(true);
         
         // IMPORTANTE: Aplicar los filtros a la grilla usando los registros y campos pasados como parámetro
-        applyFiltersWithData("", filtrosConvertidos, registrosData, camposData);
+        await applyFiltersWithData("", filtrosConvertidos, registrosData, camposData);
         
         toast({
           title: "Filtros aplicados",
@@ -543,7 +600,8 @@ export default function ModuloDinamicoV2Page() {
     applyFilters(term, advancedFilters);
   };
 
-  const applyFiltersWithData = (searchTerm: string, filters: AdvancedFilter[], registrosData: any[], camposData: Campo[]) => {
+  const applyFiltersWithData = async (searchTerm: string, filters: AdvancedFilter[], registrosData: any[], camposData: Campo[]) => {
+    // Para filtros iniciales (que siempre son del módulo padre), aplicar lógica simple
     let filtered = [...registrosData];
 
     // Aplicar búsqueda simple
@@ -609,8 +667,9 @@ export default function ModuloDinamicoV2Page() {
             default:
               return true;
           }
-        } else if (campo.TipoDato === "Numero") {
-          const numValue = parseFloat(value);
+        } else if (campo.TipoDato === "Numero" || campo.TipoDato === "IDInterno") {
+          // Para IDInterno, el valor es registro.Id
+          const numValue = campo.TipoDato === "IDInterno" ? registro.Id : parseFloat(value);
           if (isNaN(numValue)) return false;
           
           switch (filter.operador) {
@@ -656,7 +715,49 @@ export default function ModuloDinamicoV2Page() {
     setRegistrosFiltrados(filtered);
   };
 
-  const applyFilters = (searchTerm: string, filters: AdvancedFilter[]) => {
+  const applyFilters = async (searchTerm: string, filters: AdvancedFilter[]) => {
+    // Verificar si hay filtros de módulos hijos
+    const tieneFiltrosHijos = filters.some(f => f.moduloId !== modulo?.Id);
+    
+    // Si hay filtros de módulos hijos, usar el endpoint de búsqueda avanzada
+    if (tieneFiltrosHijos || (filters.length > 0 && filters.some(f => f.campo && f.valor))) {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`/api/modulos-v2/${moduloId}/busqueda-avanzada`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            filters: filters.filter(f => f.campo && f.valor),
+            searchTerm: searchTerm
+          })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          setRegistrosFiltrados(data.data.registros);
+          return;
+        } else {
+          toast({
+            title: "Error",
+            description: data.error || "Error al aplicar filtros",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error("Error aplicando filtros:", error);
+        toast({
+          title: "Error",
+          description: "Error al aplicar filtros",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    // Lógica de filtrado en cliente (solo para módulo padre sin filtros avanzados)
     let filtered = [...registros];
 
     // Aplicar búsqueda simple
@@ -680,98 +781,16 @@ export default function ModuloDinamicoV2Page() {
       });
     }
 
-    // Aplicar filtros avanzados
-    filters.forEach((filter) => {
-      if (!filter.campo || !filter.operador) return;
-
-      const campo = [...campos, ...camposSistema].find(c => c.Nombre === filter.campo);
-      if (!campo) return;
-
-      filtered = filtered.filter((registro) => {
-        // Para campos de usuario usar NombreColumna, para campos de sistema usar Nombre
-        const campoUsuario = campos.find(c => c.Nombre === filter.campo);
-        const value = campoUsuario ? registro[campoUsuario.NombreColumna] : registro[filter.campo];
-        
-        if (campo.TipoDato === "Fecha" || campo.TipoDato === "FechaHora") {
-          const recordDate = value ? new Date(value) : null;
-          if (!recordDate) return false;
-          
-          switch (filter.operador) {
-            case "igual":
-              if (!filter.valor) return true;
-              const targetDate = new Date(filter.valor);
-              return recordDate.toDateString() === targetDate.toDateString();
-            case "mayor":
-              if (!filter.valor) return true;
-              return recordDate > new Date(filter.valor);
-            case "menor":
-              if (!filter.valor) return true;
-              return recordDate < new Date(filter.valor);
-            case "mayorIgual":
-              if (!filter.valor) return true;
-              return recordDate >= new Date(filter.valor);
-            case "menorIgual":
-              if (!filter.valor) return true;
-              return recordDate <= new Date(filter.valor);
-            case "entre":
-              if (!filter.valor || !filter.valorHasta) return true;
-              const fromDate = new Date(filter.valor);
-              const toDate = new Date(filter.valorHasta);
-              toDate.setHours(23, 59, 59, 999);
-              return recordDate >= fromDate && recordDate <= toDate;
-            default:
-              return true;
-          }
-        } else if (campo.TipoDato === "Numero") {
-          const numValue = parseFloat(value);
-          if (isNaN(numValue)) return false;
-          
-          switch (filter.operador) {
-            case "igual":
-              return numValue === parseFloat(filter.valor);
-            case "mayor":
-              return numValue > parseFloat(filter.valor);
-            case "menor":
-              return numValue < parseFloat(filter.valor);
-            case "mayorIgual":
-              return numValue >= parseFloat(filter.valor);
-            case "menorIgual":
-              return numValue <= parseFloat(filter.valor);
-            case "entre":
-              return numValue >= parseFloat(filter.valor) && numValue <= parseFloat(filter.valorHasta);
-            default:
-              return true;
-          }
-        } else if (campo.TipoDato === "Lista") {
-          if (filter.operador === "igual") {
-            return value == filter.valor;
-          }
-          return true;
-        } else {
-          // Texto, Descripcion
-          const strValue = String(value || "").toLowerCase();
-          const filterValue = String(filter.valor || "").toLowerCase();
-          
-          switch (filter.operador) {
-            case "igual":
-              return strValue === filterValue;
-            case "contiene":
-              return strValue.includes(filterValue);
-            case "noContiene":
-              return !strValue.includes(filterValue);
-            default:
-              return true;
-          }
-        }
-      });
-    });
-    
     setRegistrosFiltrados(filtered);
   };
 
   const addFilter = () => {
+    if (!modulo) return;
+    
     const newFilter: AdvancedFilter = {
       id: crypto.randomUUID(),
+      moduloId: modulo.Id,
+      moduloNombre: modulo.Nombre,
       campo: "",
       operador: "igual",
       valor: "",
@@ -787,9 +806,24 @@ export default function ModuloDinamicoV2Page() {
   };
 
   const updateFilter = (id: string, updates: Partial<AdvancedFilter>) => {
-    const newFilters = advancedFilters.map(f => 
-      f.id === id ? { ...f, ...updates } : f
-    );
+    const newFilters = advancedFilters.map(f => {
+      if (f.id === id) {
+        const updatedFilter = { ...f, ...updates };
+        // Si cambia el módulo, resetear campo y valor
+        if (updates.moduloId !== undefined && updates.moduloId !== f.moduloId) {
+          updatedFilter.campo = "";
+          updatedFilter.valor = "";
+          updatedFilter.valorHasta = undefined;
+        }
+        // Si cambia el campo, resetear valor
+        if (updates.campo !== undefined && updates.campo !== f.campo) {
+          updatedFilter.valor = "";
+          updatedFilter.valorHasta = undefined;
+        }
+        return updatedFilter;
+      }
+      return f;
+    });
     setAdvancedFilters(newFilters);
     setCurrentPage(1);
     applyFilters(searchTerm, newFilters);
@@ -818,6 +852,7 @@ export default function ModuloDinamicoV2Page() {
           { value: "entre", label: "Entre" },
         ];
       case "Numero":
+      case "IDInterno":
         return [
           { value: "igual", label: "Igual a" },
           { value: "mayor", label: "Mayor que" },
@@ -839,10 +874,46 @@ export default function ModuloDinamicoV2Page() {
     }
   };
 
-  const getCamposDisponibles = () => {
-    // Incluir todos los campos excepto los de tipo Archivo
-    const camposUsuario = campos.filter(c => c.TipoDato !== "Archivo");
-    return [...camposUsuario, ...camposSistema];
+  const getModulosDisponibles = () => {
+    if (!modulo) return [];
+    
+    const modulos: { id: number; nombre: string }[] = [
+      { id: modulo.Id, nombre: modulo.Nombre }
+    ];
+    
+    modulosHijos.forEach(hijo => {
+      modulos.push({ id: hijo.Id, nombre: hijo.Nombre });
+    });
+    
+    return modulos;
+  };
+
+  const getCamposDisponibles = (moduloId?: number) => {
+    // Si no se especifica módulo, usar el módulo padre
+    const targetModuloId = moduloId || modulo?.Id;
+    
+    if (!targetModuloId) return [];
+    
+    // Si es el módulo padre
+    if (targetModuloId === modulo?.Id) {
+      const camposUsuario = campos.filter(c => c.TipoDato !== "Archivo");
+      const todosCampos = [...camposUsuario, ...camposSistema];
+      
+      // Eliminar duplicados por nombre (mantener primera ocurrencia)
+      const camposUnicos = todosCampos.filter((campo, index, self) =>
+        index === self.findIndex((c) => c.Nombre === campo.Nombre)
+      );
+      
+      return camposUnicos;
+    }
+    
+    // Si es un módulo hijo
+    const moduloHijo = modulosHijos.find(m => m.Id === targetModuloId);
+    if (moduloHijo) {
+      return moduloHijo.Campos.filter(c => c.TipoDato !== "Archivo");
+    }
+    
+    return [];
   };
 
   const handleSort = (columnName: string) => {
@@ -1023,6 +1094,9 @@ export default function ModuloDinamicoV2Page() {
     if (value === null || value === undefined || value === "") return "-";
 
     switch (campo.TipoDato) {
+      case "IDInterno":
+        // Para IDInterno, NombreColumna es 'Id', mostrar el valor del Id del registro
+        return registro.Id || "-";
       case "Fecha":
         return new Date(value).toLocaleDateString("es-AR");
       case "FechaHora":
@@ -1184,14 +1258,42 @@ export default function ModuloDinamicoV2Page() {
             ) : (
               <div className="space-y-3">
                 {advancedFilters.map((filter, index) => {
-                  const campo = getCamposDisponibles().find(c => c.Nombre === filter.campo);
+                  const campo = getCamposDisponibles(filter.moduloId).find(c => c.Nombre === filter.campo);
                   const operadores = campo ? getOperadoresPorTipo(campo.TipoDato) : [];
+                  const modulosDisponibles = getModulosDisponibles();
                   
                   return (
                     <div key={filter.id} className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                       <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-2">
+                        {/* Selector de Módulo */}
+                        <div className="md:col-span-3">
+                          <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1">Módulo</Label>
+                          <select
+                            value={filter.moduloId}
+                            onChange={(e) => {
+                              const selectedModuloId = parseInt(e.target.value);
+                              const selectedModulo = modulosDisponibles.find(m => m.id === selectedModuloId);
+                              updateFilter(filter.id, { 
+                                moduloId: selectedModuloId,
+                                moduloNombre: selectedModulo?.nombre || "",
+                                campo: "",
+                                operador: "igual",
+                                valor: "",
+                                valorHasta: undefined
+                              });
+                            }}
+                            className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 dark:bg-gray-600 dark:text-white"
+                          >
+                            {modulosDisponibles.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.nombre}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
                         {/* Selector de Campo */}
-                        <div className="md:col-span-4">
+                        <div className="md:col-span-3">
                           <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1">Campo</Label>
                           <select
                             value={filter.campo}
@@ -1206,26 +1308,17 @@ export default function ModuloDinamicoV2Page() {
                             className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 dark:bg-gray-600 dark:text-white"
                           >
                             <option value="">Seleccionar campo...</option>
-                            <optgroup label="Campos del módulo">
-                              {campos.filter(c => c.TipoDato !== "Archivo").map((c) => (
-                                <option key={c.Id} value={c.Nombre}>
-                                  {c.Nombre}
-                                </option>
-                              ))}
-                            </optgroup>
-                            <optgroup label="Campos del sistema">
-                              {camposSistema.map((c) => (
-                                <option key={c.Nombre} value={c.Nombre}>
-                                  {c.Nombre}
-                                </option>
-                              ))}
-                            </optgroup>
+                            {getCamposDisponibles(filter.moduloId).map((c) => (
+                              <option key={c.Nombre} value={c.Nombre}>
+                                {c.Nombre}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         
                         {/* Selector de Operador */}
                         {filter.campo && (
-                          <div className="md:col-span-3">
+                          <div className="md:col-span-2">
                             <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1">Condición</Label>
                             <select
                               value={filter.operador}
@@ -1243,7 +1336,7 @@ export default function ModuloDinamicoV2Page() {
                         
                         {/* Campo(s) de Valor */}
                         {filter.campo && campo && (
-                          <div className={filter.operador === "entre" ? "md:col-span-4" : "md:col-span-5"}>
+                          <div className={filter.operador === "entre" ? "md:col-span-3" : "md:col-span-4"}>
                             <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1">Valor</Label>
                             <div className="flex gap-2">
                               {/* Valor principal o "desde" para operador "entre" */}
@@ -1354,7 +1447,7 @@ export default function ModuloDinamicoV2Page() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {campos
-                .filter((c) => c.Visible)
+                .filter((c) => c.Visible && c.TipoDato !== "IDInterno")
                 .map((campo) => (
                   <div key={campo.Id}>
                     <Label htmlFor={campo.Nombre} className="dark:text-gray-300">

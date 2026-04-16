@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { getUserFromRequest } from "@/lib/auth";
+import { getUserFromRequest, registrarTraza } from "@/lib/auth";
 
 interface ApiResponse {
   success: boolean;
@@ -191,6 +191,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Obtener nombres de usuarios y roles para la traza
+    let detalleUsuarios = '';
+    let detalleRoles = '';
+    
+    if (Usuarios && Usuarios.length > 0) {
+      const nombresUsuarios = await query(
+        `SELECT Nombre FROM TD_USUARIOS WHERE Id IN (${Usuarios.join(',')})`
+      );
+      detalleUsuarios = ` - Usuarios: ${nombresUsuarios.map((u: any) => u.Nombre).join(', ')}`;
+    }
+    
+    if (Roles && Roles.length > 0) {
+      const nombresRoles = await query(
+        `SELECT Nombre FROM TD_ROLES WHERE Id IN (${Roles.join(',')})`
+      );
+      detalleRoles = ` - Roles: ${nombresRoles.map((r: any) => r.Nombre).join(', ')}`;
+    }
+
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Agregar',
+      'Administración de Bandejas',
+      `Bandeja creada: "${Nombre}" - Estado: ${Estado || 'Activa'}${detalleUsuarios}${detalleRoles}`
+    );
+
     return NextResponse.json<ApiResponse>({
       success: true,
       data: { Id: bandejaId },
@@ -251,6 +277,26 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Obtener datos anteriores para la traza
+    const datosAnteriores = await query(
+      `SELECT Nombre, Descripcion, Estado FROM TD_BANDEJAS WHERE Id = @id`,
+      { id: Id }
+    );
+    
+    const usuariosAnteriores = await query(
+      `SELECT u.Nombre FROM TR_BANDEJA_USUARIO bu 
+       INNER JOIN TD_USUARIOS u ON bu.UsuarioId = u.Id 
+       WHERE bu.BandejaId = @id`,
+      { id: Id }
+    );
+    
+    const rolesAnteriores = await query(
+      `SELECT r.Nombre FROM TR_BANDEJA_ROL br 
+       INNER JOIN TD_ROLES r ON br.RolId = r.Id 
+       WHERE br.BandejaId = @id`,
+      { id: Id }
+    );
 
     // Actualizar bandeja
     await query(
@@ -314,6 +360,45 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // Obtener nombres de usuarios y roles nuevos para la traza
+    let detalleUsuarios = '';
+    let detalleRoles = '';
+    
+    if (Usuarios && Usuarios.length > 0) {
+      const nombresUsuarios = await query(
+        `SELECT Nombre FROM TD_USUARIOS WHERE Id IN (${Usuarios.join(',')})`
+      );
+      detalleUsuarios = ` - Usuarios: ${nombresUsuarios.map((u: any) => u.Nombre).join(', ')}`;
+    }
+    
+    if (Roles && Roles.length > 0) {
+      const nombresRoles = await query(
+        `SELECT Nombre FROM TD_ROLES WHERE Id IN (${Roles.join(',')})`
+      );
+      detalleRoles = ` - Roles: ${nombresRoles.map((r: any) => r.Nombre).join(', ')}`;
+    }
+
+    // Registrar traza con cambios
+    const cambios = [];
+    if (datosAnteriores[0].Nombre !== Nombre) cambios.push(`Nombre: "${datosAnteriores[0].Nombre}" → "${Nombre}"`);
+    if (datosAnteriores[0].Estado !== Estado) cambios.push(`Estado: ${datosAnteriores[0].Estado} → ${Estado}`);
+    if (datosAnteriores[0].Descripcion !== Descripcion) cambios.push(`Descripción modificada`);
+    
+    const usuariosAnteriorStr = usuariosAnteriores.map((u: any) => u.Nombre).join(', ');
+    const rolesAnteriorStr = rolesAnteriores.map((r: any) => r.Nombre).join(', ');
+    const usuariosNuevoStr = (Usuarios && Usuarios.length > 0) ? detalleUsuarios : '';
+    const rolesNuevoStr = (Roles && Roles.length > 0) ? detalleRoles : '';
+    
+    if (usuariosAnteriorStr !== usuariosNuevoStr) cambios.push('Usuarios modificados');
+    if (rolesAnteriorStr !== rolesNuevoStr) cambios.push('Roles modificados');
+    
+    await registrarTraza(
+      user.userId,
+      'Modificar',
+      'Administración de Bandejas',
+      `Bandeja modificada: "${Nombre}" - Cambios: ${cambios.length > 0 ? cambios.join(', ') : 'Sin cambios'}${detalleUsuarios}${detalleRoles}`
+    );
+
     return NextResponse.json<ApiResponse>({
       success: true,
       message: "Bandeja actualizada exitosamente",
@@ -364,10 +449,24 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Obtener datos de la bandeja antes de eliminar
+    const bandeja = await query(
+      `SELECT Nombre FROM TD_BANDEJAS WHERE Id = @id`,
+      { id: parseInt(id) }
+    );
+
     // Eliminar la bandeja (las relaciones se eliminan en cascada)
     await query(`DELETE FROM TD_BANDEJAS WHERE Id = @id`, {
       id: parseInt(id),
     });
+
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Eliminar',
+      'Administración de Bandejas',
+      `Bandeja eliminada: "${bandeja[0]?.Nombre || 'Desconocida'}"`
+    );
 
     return NextResponse.json<ApiResponse>({
       success: true,

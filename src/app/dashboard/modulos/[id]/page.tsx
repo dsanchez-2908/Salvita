@@ -22,6 +22,8 @@ interface CampoSistema {
   Nombre: string;
   TipoDato: string;
   Visible: boolean;
+  ListaId?: number;
+  ListaNombre?: string;
 }
 
 interface Campo {
@@ -97,9 +99,9 @@ export default function ModuloDinamicoPage() {
         setRegistrosFiltrados(data.data.registros);
 
         // Cargar valores de listas
-        const listasIds = data.data.campos
+        const listasIds: number[] = data.data.campos
           .filter((c: Campo) => c.TipoDato === "Lista" && c.ListaId)
-          .map((c: Campo) => c.ListaId);
+          .map((c: Campo) => c.ListaId!);
 
         if (listasIds.length > 0) {
           await loadValoresListas([...new Set(listasIds)]);

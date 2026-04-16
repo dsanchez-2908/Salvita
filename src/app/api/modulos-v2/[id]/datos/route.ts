@@ -185,8 +185,10 @@ export async function POST(
     }
 
     // Construir query de inserción (sin FKs, ahora van a TR_MODULO_REGISTRO_RELACION)
-    const camposNombres = campos.map((c: any) => `[${c.NombreColumna}]`).join(', ');
-    const camposParams = campos.map((c: any) => `@${c.NombreColumna}`).join(', ');
+    // Excluir campos tipo IDInterno (no se pueden insertar, apuntan a la columna Id que es IDENTITY)
+    const camposInsertables = campos.filter((c: any) => c.TipoDato !== 'IDInterno');
+    const camposNombres = camposInsertables.map((c: any) => `[${c.NombreColumna}]`).join(', ');
+    const camposParams = camposInsertables.map((c: any) => `@${c.NombreColumna}`).join(', ');
 
     const insertQuery = `
       INSERT INTO [${modulo.NombreTabla}] 
@@ -198,8 +200,8 @@ export async function POST(
     const pool = await getConnection();
     const request_db = pool.request();
 
-    // Agregar parámetros de campos configurados
-    campos.forEach((campo: any) => {
+    // Agregar parámetros de campos configurados (excluir IDInterno)
+    camposInsertables.forEach((campo: any) => {
       const valor = body[campo.Nombre];
       
       switch (campo.TipoDato) {

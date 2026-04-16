@@ -128,8 +128,8 @@ export async function GET(request: NextRequest) {
         total: resultado[0]?.Total || 0,
         filtroAplicado: cfg.FiltroActivo && cfg.CampoFiltro ? `${cfg.CampoFiltro} ${cfg.FiltroOperador || '='} ${cfg.ValorFiltro}` : null
       };
-    } else if (cfg.TipoVisualizacion === 'Agrupamiento') {
-      // Obtener datos agrupados con filtro opcional
+    } else if (cfg.TipoVisualizacion === 'Agrupamiento' || cfg.TipoVisualizacion === 'Grafico') {
+      // Obtener datos agrupados con filtro opcional (usado tanto para Agrupamiento como para Gráfico)
       const tableName = cfg.ModuloTabla;
       const campoAgrupamiento = cfg.CampoAgrupamiento;
 

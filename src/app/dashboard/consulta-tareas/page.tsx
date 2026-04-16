@@ -51,7 +51,7 @@ export default function ConsultaTareasPage() {
   const [usuarioCreacionId, setUsuarioCreacionId] = useState("");
   const [usuarioFinalizacionId, setUsuarioFinalizacionId] = useState("");
 
-  const estados = ["Pendiente", "Tomada", "Finalizada", "Rechazada"];
+  const estados = ["Pendiente", "Tomada", "Completada", "Rechazada"];
 
   useEffect(() => {
     cargarPlantillas();
@@ -150,7 +150,7 @@ export default function ConsultaTareasPage() {
     const badges: Record<string, string> = {
       Pendiente: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
       Tomada: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-      Finalizada: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+      Completada: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
       Rechazada: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
     };
     return badges[estado] || "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
@@ -160,7 +160,7 @@ export default function ConsultaTareasPage() {
     const icons: Record<string, JSX.Element> = {
       Pendiente: <Clock className="h-4 w-4 text-yellow-600" />,
       Tomada: <AlertCircle className="h-4 w-4 text-blue-600" />,
-      Finalizada: <CheckCircle className="h-4 w-4 text-green-600" />,
+      Completada: <CheckCircle className="h-4 w-4 text-green-600" />,
       Rechazada: <XCircle className="h-4 w-4 text-red-600" />,
     };
     return icons[estado] || <Clock className="h-4 w-4 text-gray-600" />;

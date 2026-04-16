@@ -68,15 +68,6 @@ export async function GET(request: NextRequest) {
         { moduloId: parseInt(id) }
       );
 
-      console.log(`GET /api/modulos-v2?id=${id} - Relaciones encontradas:`, relacionesQuery.length);
-      if (relacionesQuery.length > 0) {
-        console.log('GET - Relaciones detalle:', relacionesQuery.map((r: any) => ({
-          ModuloHijoId: r.ModuloHijoId,
-          ModuloHijoNombre: r.ModuloHijoNombre,
-          TipoRelacion: r.TipoRelacion,
-        })));
-      }
-
       // Cargar módulos relacionados con estructura completa
       const modulosRelacionados = [];
       const modulosSecundarios = []; // Solo tipo "Hijo"
@@ -100,11 +91,8 @@ export async function GET(request: NextRequest) {
           }
         );
 
-        console.log(`GET - Verificando permiso para ModuloHijoId=${rel.ModuloHijoId}, TienePermiso:`, permisoVer[0]?.TienePermiso);
-
         // Si no tiene permiso, saltar este módulo hijo
         if (!permisoVer[0]?.TienePermiso || permisoVer[0].TienePermiso === 0) {
-          console.log(`GET - Usuario sin permiso para ver ModuloHijoId=${rel.ModuloHijoId}, saltando...`);
           continue;
         }
 
@@ -148,13 +136,6 @@ export async function GET(request: NextRequest) {
           modulosSecundarios.push(moduloHijoCompleto);
         }
       }
-
-      console.log(`GET - ModulosRelacionados final (${modulosRelacionados.length}):`, 
-        modulosRelacionados.map((r: any) => ({
-          ModuloHijoId: r.ModuloHijoId,
-          TipoRelacion: r.TipoRelacion,
-        }))
-      );
 
       return NextResponse.json<ApiResponse>({
         success: true,
@@ -336,6 +317,11 @@ export async function POST(request: NextRequest) {
 
       // Agregar columnas de campos
       for (const campo of Campos) {
+        // Los campos de tipo IDInterno no crean columna, usan la columna Id existente
+        if (campo.TipoDato === 'IDInterno') {
+          continue;
+        }
+        
         const nombreColumna = sanitizeColumnName(campo.Nombre);
         let tipoDato = 'VARCHAR(250)';
 
@@ -383,7 +369,8 @@ export async function POST(request: NextRequest) {
 
       // 3. Registrar campos en TD_CAMPOS
       for (const campo of Campos) {
-        const nombreColumna = sanitizeColumnName(campo.Nombre);
+        // Para campos IDInterno, usar 'Id' como nombre de columna
+        const nombreColumna = campo.TipoDato === 'IDInterno' ? 'Id' : sanitizeColumnName(campo.Nombre);
         
         await transaction.request()
           .input('moduloId', sql.Int, moduloId)
@@ -442,15 +429,14 @@ export async function POST(request: NextRequest) {
       }
 
       // 5. Asignar permisos completos al rol Administrador
-      console.log('POST - Buscando rol Administrador...');
       const adminRole = await transaction.request().query(`
         SELECT Id FROM TD_ROLES WHERE Nombre = 'Administrador' AND Estado = 'Activo'
       `);
 
       if (adminRole.recordset.length > 0) {
         const adminRoleId = adminRole.recordset[0].Id;
-        console.log(`POST - Asignando permisos a rol Administrador (ID: ${adminRoleId}) para módulo ${moduloId}...`);
         
+        // Permisos del módulo principal (sin contexto padre)
         await transaction.request()
           .input('rolId', sql.Int, adminRoleId)
           .input('moduloId', sql.Int, moduloId)
@@ -460,10 +446,61 @@ export async function POST(request: NextRequest) {
             (RolId, ModuloId, ModuloPadreId, PermisoVer, PermisoVerAgrupado, PermisoAgregar, PermisoModificar, PermisoEliminar, UsuarioAsignacion)
             VALUES (@rolId, @moduloId, NULL, 1, 1, 1, 1, 1, @usuarioAsignacion)
           `);
-        
-        console.log('POST - Permisos de Administrador asignados exitosamente');
-      } else {
-        console.log('POST - ⚠️ Rol Administrador no encontrado o inactivo');
+
+        // Asignar permisos contextuales para módulos hijos vinculados
+        if (ModulosRelacionados && ModulosRelacionados.length > 0) {
+          for (const moduloHijoId of ModulosRelacionados) {
+            // Verificar si ya existe el permiso contextual
+            const existePermiso = await transaction.request()
+              .input('rolId', sql.Int, adminRoleId)
+              .input('moduloHijoId', sql.Int, moduloHijoId)
+              .input('moduloPadreId', sql.Int, moduloId)
+              .query(`
+                SELECT Id FROM TR_ROL_MODULO_PERMISO 
+                WHERE RolId = @rolId AND ModuloId = @moduloHijoId AND ModuloPadreId = @moduloPadreId
+              `);
+
+            if (existePermiso.recordset.length === 0) {
+              await transaction.request()
+                .input('rolId', sql.Int, adminRoleId)
+                .input('moduloHijoId', sql.Int, moduloHijoId)
+                .input('moduloPadreId', sql.Int, moduloId)
+                .input('usuarioAsignacion', sql.VarChar, user.usuario)
+                .query(`
+                  INSERT INTO TR_ROL_MODULO_PERMISO 
+                  (RolId, ModuloId, ModuloPadreId, PermisoVer, PermisoVerAgrupado, PermisoAgregar, PermisoModificar, PermisoEliminar, UsuarioAsignacion)
+                  VALUES (@rolId, @moduloHijoId, @moduloPadreId, 1, 1, 1, 1, 1, @usuarioAsignacion)
+                `);
+            }
+          }
+        }
+
+        // Asignar permisos contextuales para módulos de asociación
+        if (ModulosParaAsociar && ModulosParaAsociar.length > 0) {
+          for (const moduloAsociarId of ModulosParaAsociar) {
+            const existePermiso = await transaction.request()
+              .input('rolId', sql.Int, adminRoleId)
+              .input('moduloAsociarId', sql.Int, moduloAsociarId)
+              .input('moduloPadreId', sql.Int, moduloId)
+              .query(`
+                SELECT Id FROM TR_ROL_MODULO_PERMISO 
+                WHERE RolId = @rolId AND ModuloId = @moduloAsociarId AND ModuloPadreId = @moduloPadreId
+              `);
+
+            if (existePermiso.recordset.length === 0) {
+              await transaction.request()
+                .input('rolId', sql.Int, adminRoleId)
+                .input('moduloAsociarId', sql.Int, moduloAsociarId)
+                .input('moduloPadreId', sql.Int, moduloId)
+                .input('usuarioAsignacion', sql.VarChar, user.usuario)
+                .query(`
+                  INSERT INTO TR_ROL_MODULO_PERMISO 
+                  (RolId, ModuloId, ModuloPadreId, PermisoVer, PermisoVerAgrupado, PermisoAgregar, PermisoModificar, PermisoEliminar, UsuarioAsignacion)
+                  VALUES (@rolId, @moduloAsociarId, @moduloPadreId, 1, 1, 1, 1, 1, @usuarioAsignacion)
+                `);
+            }
+          }
+        }
       }
 
       await transaction.commit();
@@ -518,14 +555,6 @@ export async function PUT(request: NextRequest) {
 
     const body: Partial<CreateModuloV2Request> & { Nombre?: string; Activo?: boolean } = await request.json();
     const { Nombre, MostrarEnMenu, Icono, Orden, Campos, ModulosRelacionados, ModulosParaAsociar, Activo } = body;
-
-    console.log('PUT /api/modulos-v2 - Body recibido:', {
-      Nombre,
-      ModulosRelacionados,
-      ModulosParaAsociar,
-      ModulosRelacionadosType: typeof ModulosRelacionados,
-      ModulosParaAsociarType: typeof ModulosParaAsociar,
-    });
 
     // Verificar que exista el módulo
     const existingModulo = await query(
@@ -682,27 +711,15 @@ export async function PUT(request: NextRequest) {
       }
 
       // 3. Actualizar relaciones
-      console.log('PUT - Antes de actualizar relaciones:', {
-        ModulosRelacionados,
-        ModulosRelacionadosIsUndefined: ModulosRelacionados === undefined,
-        ModulosRelacionadosLength: ModulosRelacionados?.length,
-        ModulosParaAsociar,
-        ModulosParaAsociarIsUndefined: ModulosParaAsociar === undefined,
-        ModulosParaAsociarLength: ModulosParaAsociar?.length,
-      });
-
       if (ModulosRelacionados !== undefined) {
-        console.log('PUT - Eliminando relaciones tipo Hijo existentes...');
         // Eliminar relaciones existentes tipo "Hijo"
         await transaction.request()
           .input('moduloPadreId', sql.Int, parseInt(id))
           .input('tipoRelacion', sql.VarChar, 'Hijo')
           .query('DELETE FROM TR_MODULO_RELACION WHERE ModuloPadreId = @moduloPadreId AND TipoRelacion = @tipoRelacion');
 
-        console.log(`PUT - Insertando ${ModulosRelacionados.length} relaciones tipo Hijo...`);
         // Crear nuevas relaciones tipo "Hijo"
         for (let i = 0; i < ModulosRelacionados.length; i++) {
-          console.log(`PUT - Insertando relación Hijo: ModuloPadreId=${id}, ModuloHijoId=${ModulosRelacionados[i]}, Orden=${i}`);
           await transaction.request()
             .input('moduloPadreId', sql.Int, parseInt(id))
             .input('moduloHijoId', sql.Int, ModulosRelacionados[i])
@@ -714,9 +731,7 @@ export async function PUT(request: NextRequest) {
               (ModuloPadreId, ModuloHijoId, TipoRelacion, Orden, UsuarioCreacion)
               VALUES (@moduloPadreId, @moduloHijoId, @tipoRelacion, @orden, @usuarioCreacion)
             `);
-          console.log(`PUT - Relación Hijo insertada exitosamente`);
         }
-        console.log('PUT - Relaciones tipo Hijo actualizadas');
       }
 
       // 3b. Actualizar relaciones para asociar registros
@@ -743,9 +758,71 @@ export async function PUT(request: NextRequest) {
         }
       }
 
-      console.log('PUT - Haciendo commit de la transacción...');
+      // 4. Asignar permisos contextuales al rol Administrador para módulos vinculados
+      const adminRole = await transaction.request().query(`
+        SELECT Id FROM TD_ROLES WHERE Nombre = 'Administrador' AND Estado = 'Activo'
+      `);
+
+      if (adminRole.recordset.length > 0) {
+        const adminRoleId = adminRole.recordset[0].Id;
+
+        // Asignar permisos contextuales para módulos hijos vinculados
+        if (ModulosRelacionados !== undefined && ModulosRelacionados.length > 0) {
+          for (const moduloHijoId of ModulosRelacionados) {
+            // Verificar si ya existe el permiso contextual
+            const existePermiso = await transaction.request()
+              .input('rolId', sql.Int, adminRoleId)
+              .input('moduloHijoId', sql.Int, moduloHijoId)
+              .input('moduloPadreId', sql.Int, parseInt(id))
+              .query(`
+                SELECT Id FROM TR_ROL_MODULO_PERMISO 
+                WHERE RolId = @rolId AND ModuloId = @moduloHijoId AND ModuloPadreId = @moduloPadreId
+              `);
+
+            if (existePermiso.recordset.length === 0) {
+              await transaction.request()
+                .input('rolId', sql.Int, adminRoleId)
+                .input('moduloHijoId', sql.Int, moduloHijoId)
+                .input('moduloPadreId', sql.Int, parseInt(id))
+                .input('usuarioAsignacion', sql.VarChar, user.usuario)
+                .query(`
+                  INSERT INTO TR_ROL_MODULO_PERMISO 
+                  (RolId, ModuloId, ModuloPadreId, PermisoVer, PermisoVerAgrupado, PermisoAgregar, PermisoModificar, PermisoEliminar, UsuarioAsignacion)
+                  VALUES (@rolId, @moduloHijoId, @moduloPadreId, 1, 1, 1, 1, 1, @usuarioAsignacion)
+                `);
+            }
+          }
+        }
+
+        // Asignar permisos contextuales para módulos de asociación
+        if (ModulosParaAsociar !== undefined && ModulosParaAsociar.length > 0) {
+          for (const moduloAsociarId of ModulosParaAsociar) {
+            const existePermiso = await transaction.request()
+              .input('rolId', sql.Int, adminRoleId)
+              .input('moduloAsociarId', sql.Int, moduloAsociarId)
+              .input('moduloPadreId', sql.Int, parseInt(id))
+              .query(`
+                SELECT Id FROM TR_ROL_MODULO_PERMISO 
+                WHERE RolId = @rolId AND ModuloId = @moduloAsociarId AND ModuloPadreId = @moduloPadreId
+              `);
+
+            if (existePermiso.recordset.length === 0) {
+              await transaction.request()
+                .input('rolId', sql.Int, adminRoleId)
+                .input('moduloAsociarId', sql.Int, moduloAsociarId)
+                .input('moduloPadreId', sql.Int, parseInt(id))
+                .input('usuarioAsignacion', sql.VarChar, user.usuario)
+                .query(`
+                  INSERT INTO TR_ROL_MODULO_PERMISO 
+                  (RolId, ModuloId, ModuloPadreId, PermisoVer, PermisoVerAgrupado, PermisoAgregar, PermisoModificar, PermisoEliminar, UsuarioAsignacion)
+                  VALUES (@rolId, @moduloAsociarId, @moduloPadreId, 1, 1, 1, 1, 1, @usuarioAsignacion)
+                `);
+            }
+          }
+        }
+      }
+
       await transaction.commit();
-      console.log('PUT - Commit exitoso');
 
       await registrarTraza(
         user.userId,

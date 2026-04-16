@@ -29,11 +29,6 @@ interface EstadisticasGenerales {
   Vencidas: number;
 }
 
-interface TiempoPromedio {
-  PromedioCompletadas: number;
-  PromedioTomada: number;
-}
-
 interface TareaPorUsuario {
   UsuarioId: number;
   UsuarioNombre: string;
@@ -67,29 +62,12 @@ interface TareaPorDia {
   Total: number;
 }
 
-interface TopUsuario {
-  UsuarioId: number;
-  UsuarioNombre: string;
-  TareasCompletadas: number;
-  PromedioHoras: number;
-}
-
-interface EficienciaTipo {
-  TipoAsignacion: string;
-  Total: number;
-  Completadas: number;
-  PorcentajeExito: number;
-}
-
 interface Estadisticas {
   general: EstadisticasGenerales;
-  tiempoPromedio: TiempoPromedio;
   tareasPorUsuario: TareaPorUsuario[];
   tareasPorBandeja: TareaPorBandeja[];
   tareasPorPlantilla: TareaPorPlantilla[];
   tareasPorDia: TareaPorDia[];
-  topUsuarios: TopUsuario[];
-  eficienciaTipoAsignacion: EficienciaTipo[];
 }
 
 export default function MonitorTareasPage() {
@@ -100,7 +78,6 @@ export default function MonitorTareasPage() {
   const [fechaFin, setFechaFin] = useState("");
 
   useEffect(() => {
-    // Establecer últimos 30 días por defecto
     const hoy = new Date();
     const hace30Dias = new Date();
     hace30Dias.setDate(hoy.getDate() - 30);
@@ -188,11 +165,10 @@ export default function MonitorTareasPage() {
     );
   }
 
-  const { general, tiempoPromedio, tareasPorUsuario, tareasPorBandeja, tareasPorPlantilla, topUsuarios, eficienciaTipoAsignacion } = estadisticas;
+  const { general, tareasPorUsuario, tareasPorBandeja, tareasPorPlantilla } = estadisticas;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -209,7 +185,6 @@ export default function MonitorTareasPage() {
         </Button>
       </div>
 
-      {/* Filtros de Fecha */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -244,7 +219,6 @@ export default function MonitorTareasPage() {
         </CardContent>
       </Card>
 
-      {/* Tarjetas de Resumen */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -299,69 +273,6 @@ export default function MonitorTareasPage() {
         </Card>
       </div>
 
-      {/* Tiempo Promedio */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Tiempo Promedio de Resolución
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Desde creación hasta completado</p>
-                <p className="text-3xl font-bold">
-                  {tiempoPromedio.PromedioCompletadas 
-                    ? `${tiempoPromedio.PromedioCompletadas.toFixed(1)} días`
-                    : "N/A"}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Desde creación hasta toma</p>
-                <p className="text-2xl font-bold">
-                  {tiempoPromedio.PromedioTomada 
-                    ? `${tiempoPromedio.PromedioTomada.toFixed(1)} días`
-                    : "N/A"}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Eficiencia por Tipo de Asignación
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {eficienciaTipoAsignacion.map((eficiencia) => (
-                <div key={eficiencia.TipoAsignacion}>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium">{eficiencia.TipoAsignacion}</span>
-                    <span className="text-sm font-bold">{eficiencia.PorcentajeExito}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                    <div 
-                      className="bg-blue-600 h-2.5 rounded-full"
-                      style={{ width: `${eficiencia.PorcentajeExito}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {eficiencia.Completadas} de {eficiencia.Total} tareas
-                  </p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tareas por Usuario */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -408,7 +319,6 @@ export default function MonitorTareasPage() {
         </CardContent>
       </Card>
 
-      {/* Tareas por Bandeja */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -455,89 +365,48 @@ export default function MonitorTareasPage() {
         </CardContent>
       </Card>
 
-      {/* Top Usuarios y Plantillas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Top Usuarios Finalizadores
-            </CardTitle>
-            <CardDescription>
-              Usuarios que más tareas han completado
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {topUsuarios.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                No hay datos disponibles
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {topUsuarios.map((usuario, index) => (
-                  <div key={usuario.UsuarioId} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
-                        {index + 1}
-                      </div>
-                      <span className="font-medium">{usuario.UsuarioNombre}</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold">{usuario.TareasCompletadas}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {usuario.PromedioHoras ? `${usuario.PromedioHoras.toFixed(1)}h promedio` : 'N/A'}
-                      </div>
-                    </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Tareas por Plantilla
+          </CardTitle>
+          <CardDescription>
+            Distribución de tareas por tipo
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {tareasPorPlantilla.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">
+              No hay datos disponibles
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {tareasPorPlantilla.slice(0, 10).map((plantilla) => (
+                <div key={plantilla.PlantillaId}>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm font-medium truncate" title={plantilla.PlantillaNombre}>
+                      {plantilla.PlantillaNombre}
+                    </span>
+                    <span className="text-sm font-bold">{plantilla.TotalTareas}</span>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Tareas por Plantilla
-            </CardTitle>
-            <CardDescription>
-              Distribución de tareas por tipo
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {tareasPorPlantilla.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                No hay datos disponibles
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {tareasPorPlantilla.slice(0, 10).map((plantilla) => (
-                  <div key={plantilla.PlantillaId}>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-medium truncate" title={plantilla.PlantillaNombre}>
-                        {plantilla.PlantillaNombre}
-                      </span>
-                      <span className="text-sm font-bold">{plantilla.TotalTareas}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-600 h-2 rounded-full"
-                        style={{ 
-                          width: `${calcularPorcentaje(plantilla.Completadas, plantilla.TotalTareas)}%` 
-                        }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {plantilla.Completadas} completadas, {plantilla.Rechazadas} rechazadas
-                    </p>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-green-600 h-2 rounded-full"
+                      style={{ 
+                        width: `${calcularPorcentaje(plantilla.Completadas, plantilla.TotalTareas)}%` 
+                      }}
+                    ></div>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {plantilla.Completadas} completadas, {plantilla.Rechazadas} rechazadas
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

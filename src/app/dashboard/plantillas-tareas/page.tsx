@@ -137,7 +137,7 @@ export default function PlantillasTareasPage() {
   const handleDelete = async (id: number, nombre: string) => {
     const confirmed = await confirm({
       title: "Confirmar eliminación",
-      message: `¿Está seguro de eliminar la plantilla "${nombre}"?`,
+      description: `¿Está seguro de eliminar la plantilla "${nombre}"?`,
       confirmText: "Eliminar",
       cancelText: "Cancelar",
     });

@@ -1,5 +1,5 @@
 // Tipos de datos para campos
-export type TipoDato = 'Texto' | 'Descripcion' | 'Numero' | 'Fecha' | 'FechaHora' | 'Lista' | 'Archivo';
+export type TipoDato = 'Texto' | 'Descripcion' | 'Numero' | 'Decimal' | 'Fecha' | 'FechaHora' | 'Lista' | 'Archivo' | 'IDInterno';
 
 // Tipos de módulos
 export type TipoModulo = 'Principal' | 'Secundario' | 'Independiente';
@@ -244,14 +244,38 @@ export interface CreateRolRequest {
   Nombre: string;
   Descripcion?: string;
   Permisos?: CreateRolPermisoRequest[];
+  AccesoTrazas?: boolean;
+  PermisosTareas?: {
+    HabilitarTareas: boolean;
+    PuedeCrearTareas: boolean;
+    PuedeAdministracionTareas: boolean;
+    AdministracionBandejas: boolean;
+    PuedeConsultarTareas: boolean;
+    PuedeVerMonitorTareas: boolean;
+  };
+  PermisosConfig?: {
+    HabilitarMenuConfig: boolean;
+    PermisosRoles: boolean;
+    PermisosUsuarios: boolean;
+    PermisosListas: boolean;
+    PermisosModulos: boolean;
+    PermisosParametros: boolean;
+    PermisosDashboard: boolean;
+    PermisosParametrosAV: boolean;
+    PermisosReportes: boolean;
+  };
+  Reportes?: number[];
 }
 
 export interface CreateRolPermisoRequest {
   ModuloId: number;
+  ModuloPadreId?: number;
   PermisoAgregar: boolean;
   PermisoModificar: boolean;
   PermisoEliminar: boolean;
   PermisoVer: boolean;
+  PermisoVerAgrupado?: boolean;
+  PermisoVerRelacionado?: boolean;
 }
 
 export interface CreateUsuarioRequest {

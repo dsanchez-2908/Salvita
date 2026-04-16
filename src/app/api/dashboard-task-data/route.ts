@@ -30,23 +30,16 @@ export async function GET(request: NextRequest) {
     let data: any = {};
 
     // PendientesPropios + BandejaPersonal
-    // Muestra tareas pendientes del usuario (asignadas directamente o en bandejas)
+    // Muestra solo tareas PENDIENTES asignadas directamente al usuario en SU bandeja personal
     if (tipoVisualizacion === 'PendientesPropios' && categoria === 'BandejaPersonal') {
       const result = await query(
         `SELECT 
           COUNT(*) as TotalPendientes,
-          SUM(CASE WHEN FechaVencimiento < GETDATE() AND Estado NOT IN ('Finalizada', 'Cancelada') THEN 1 ELSE 0 END) as TotalVencidas
+          SUM(CASE WHEN FechaVencimiento < GETDATE() THEN 1 ELSE 0 END) as TotalVencidas
          FROM TD_TAREAS t
-         WHERE t.Estado IN ('Pendiente', 'Tomada')
-         AND (
-           (t.TipoAsignacion = 'Usuario' AND t.UsuarioAsignadoId = @userId)
-           OR
-           (t.TipoAsignacion = 'Bandeja' AND EXISTS (
-             SELECT 1 FROM VW_BANDEJAS_POR_USUARIO vb 
-             WHERE vb.BandejaId = t.BandejaAsignadaId 
-             AND vb.UsuarioId = @userId
-           ))
-         )`,
+         WHERE t.Estado = 'Pendiente'
+         AND t.TipoAsignacion = 'Usuario' 
+         AND t.UsuarioAsignadoId = @userId`,
         { userId: user.userId }
       );
 
@@ -54,28 +47,31 @@ export async function GET(request: NextRequest) {
     }
 
     // PendientesPropios + BandejasGrupal
-    // Muestra agregado de todas las tareas del usuario (directas y en bandejas)
+    // Muestra cada bandeja grupal del usuario con total pendientes y tomadas por el usuario
     else if (tipoVisualizacion === 'PendientesPropios' && categoria === 'BandejasGrupal') {
       const result = await query(
         `SELECT 
-          COUNT(*) as TotalPendientes,
-          SUM(CASE WHEN t.TipoAsignacion = 'Usuario' AND t.UsuarioAsignadoId = @userId THEN 1 ELSE 0 END) as AsignadasDirectas,
-          SUM(CASE WHEN t.FechaVencimiento < GETDATE() AND t.Estado NOT IN ('Finalizada', 'Cancelada') THEN 1 ELSE 0 END) as TotalVencidas
-         FROM TD_TAREAS t
-         WHERE t.Estado IN ('Pendiente', 'Tomada')
-         AND (
-           (t.TipoAsignacion = 'Usuario' AND t.UsuarioAsignadoId = @userId)
-           OR
-           (t.TipoAsignacion = 'Bandeja' AND EXISTS (
-             SELECT 1 FROM VW_BANDEJAS_POR_USUARIO vb 
-             WHERE vb.BandejaId = t.BandejaAsignadaId 
-             AND vb.UsuarioId = @userId
-           ))
-         )`,
+          b.Id as BandejaId,
+          b.Nombre as BandejaNombre,
+          COUNT(CASE WHEN t.Estado = 'Pendiente' THEN 1 END) as TotalPendientes,
+          COUNT(CASE WHEN t.Estado = 'Tomada' AND t.UsuarioTomadaPorId = @userId THEN 1 END) as TotalTomadasPorMi,
+          SUM(CASE WHEN t.FechaVencimiento < GETDATE() AND t.Estado = 'Pendiente' THEN 1 ELSE 0 END) as TotalVencidas
+         FROM TD_BANDEJAS b
+         INNER JOIN TD_TAREAS t ON b.Id = t.BandejaAsignadaId
+         WHERE b.Estado = 'Activa'
+         AND t.TipoAsignacion = 'Bandeja'
+         AND EXISTS (
+           SELECT 1 FROM VW_BANDEJAS_POR_USUARIO vb 
+           WHERE vb.BandejaId = b.Id 
+           AND vb.UsuarioId = @userId
+         )
+         GROUP BY b.Id, b.Nombre
+         HAVING COUNT(CASE WHEN t.Estado IN ('Pendiente', 'Tomada') THEN 1 END) > 0
+         ORDER BY b.Nombre`,
         { userId: user.userId }
       );
 
-      data = result[0];
+      data = result;
     }
 
     // PendientesTotales + BandejaPersonal
@@ -87,7 +83,7 @@ export async function GET(request: NextRequest) {
           u.Usuario,
           u.Nombre as NombreCompleto,
           COUNT(*) as TotalPendientes,
-          SUM(CASE WHEN t.FechaVencimiento < GETDATE() AND t.Estado NOT IN ('Finalizada', 'Cancelada') THEN 1 ELSE 0 END) as TotalVencidas
+          SUM(CASE WHEN t.FechaVencimiento < GETDATE() AND t.Estado NOT IN ('Completada', 'Rechazada') THEN 1 ELSE 0 END) as TotalVencidas
          FROM TD_USUARIOS u
          INNER JOIN TD_TAREAS t ON (
            (t.TipoAsignacion = 'Usuario' AND t.UsuarioAsignadoId = u.Id)
@@ -117,7 +113,7 @@ export async function GET(request: NextRequest) {
           b.Nombre as BandejaNombre,
           COUNT(*) as TotalPendientes,
           SUM(CASE WHEN t.Estado = 'Tomada' THEN 1 ELSE 0 END) as TotalTomadas,
-          SUM(CASE WHEN t.FechaVencimiento < GETDATE() AND t.Estado NOT IN ('Finalizada', 'Cancelada') THEN 1 ELSE 0 END) as TotalVencidas
+          SUM(CASE WHEN t.FechaVencimiento < GETDATE() AND t.Estado NOT IN ('Completada', 'Rechazada') THEN 1 ELSE 0 END) as TotalVencidas
          FROM TD_BANDEJAS b
          INNER JOIN TD_TAREAS t ON b.Id = t.BandejaAsignadaId
          WHERE b.Estado = 'Activa'

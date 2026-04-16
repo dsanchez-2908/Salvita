@@ -130,7 +130,7 @@ export async function verificarPermiso(
  */
 export async function registrarTraza(
   userId: number,
-  accion: 'Agregar' | 'Modificar' | 'Eliminar' | 'Consultar' | 'Asociar' | 'Desasociar',
+  accion: 'Agregar' | 'Modificar' | 'Eliminar' | 'Consultar' | 'Asociar' | 'Desasociar' | 'Crear' | 'Tomar' | 'Reasignar' | 'Rechazar' | 'Completar' | 'Comentar',
   proceso: string,
   detalle: string
 ): Promise<void> {
@@ -144,7 +144,7 @@ export async function registrarTraza(
     const usuario = usuarios[0]?.Usuario || 'Desconocido';
 
     await query(
-      `INSERT INTO TD_MODULO_TRAZAS (UsuarioId, Usuario, Accion, Proceso, Detalle)
+      `INSERT INTO TD_TRAZAS (UsuarioId, Usuario, Accion, Proceso, Detalle)
        VALUES (@userId, @usuario, @accion, @proceso, @detalle)`,
       { userId, usuario, accion, proceso, detalle }
     );

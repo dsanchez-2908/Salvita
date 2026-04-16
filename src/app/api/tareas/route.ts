@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, execute } from "@/lib/db";
-import { getUserFromRequest } from "@/lib/auth";
+import { getUserFromRequest, registrarTraza } from "@/lib/auth";
 
 interface ApiResponse {
   success: boolean;
@@ -177,6 +177,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Obtener nombre de la plantilla para las trazas
+    const plantilla = await query(
+      `SELECT Nombre FROM TD_PLANTILLA_TAREAS WHERE Id = @id`,
+      { id: PlantillaId }
+    );
+    const plantillaNombre = plantilla[0]?.Nombre || 'Desconocida';
+    
+    // Obtener nombre del usuario/bandeja asignado
+    let asignadoA = '';
+    if (TipoAsignacion === 'Usuario') {
+      const usuario = await query(
+        `SELECT Nombre FROM TD_USUARIOS WHERE Id = @id`,
+        { id: UsuarioAsignadoId }
+      );
+      asignadoA = `Usuario: ${usuario[0]?.Nombre || 'Desconocido'}`;
+    } else {
+      const bandeja = await query(
+        `SELECT Nombre FROM TD_BANDEJAS WHERE Id = @id`,
+        { id: BandejaAsignadaId }
+      );
+      asignadoA = `Bandeja: ${bandeja[0]?.Nombre || 'Desconocida'}`;
+    }
+
     // MODO 1: Crear una tarea por cada registro
     if (CrearTareasPorRegistro && registrosTemporales.length > 1) {
       const tareasCreadas = [];
@@ -275,6 +298,14 @@ export async function POST(request: NextRequest) {
             usuario: user.nombre,
             detalle: 'Tarea creada con 1 registro',
           }
+        );
+        
+        // Registrar traza de auditoría
+        await registrarTraza(
+          user.userId,
+          'Crear',
+          'Tareas',
+          `Tarea creada - Plantilla: "${plantillaNombre}" - ${asignadoA} - 1 registro asociado${IniciarInmediatamente ? ' - Iniciada inmediatamente' : ''}`
         );
       }
 
@@ -390,6 +421,14 @@ export async function POST(request: NextRequest) {
           ? `Tarea creada con ${registrosTemporales.length} registro(s)`
           : 'Tarea creada sin registros asociados',
       }
+    );
+    
+    // Registrar traza de auditoría
+    await registrarTraza(
+      user.userId,
+      'Crear',
+      'Tareas',
+      `Tarea creada - Plantilla: "${plantillaNombre}" - ${asignadoA} - ${registrosTemporales.length} registro(s) asociado(s)${IniciarInmediatamente ? ' - Iniciada inmediatamente' : ''}`
     );
 
     // Limpiar registros temporales del usuario

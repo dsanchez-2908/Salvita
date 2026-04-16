@@ -14,6 +14,7 @@ import { Plus, Edit, Trash2, Search } from "lucide-react";
 export default function RolesPage() {
   const [roles, setRoles] = useState<any[]>([]);
   const [modulos, setModulos] = useState<any[]>([]);
+  const [reportes, setReportes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -32,6 +33,18 @@ export default function RolesPage() {
       PuedeConsultarTareas: false,
       PuedeVerMonitorTareas: false,
     },
+    PermisosConfig: {
+      HabilitarMenuConfig: false,
+      PermisosRoles: false,
+      PermisosUsuarios: false,
+      PermisosListas: false,
+      PermisosModulos: false,
+      PermisosParametros: false,
+      PermisosDashboard: false,
+      PermisosParametrosAV: false,
+      PermisosReportes: false,
+    },
+    Reportes: [] as number[], // IDs de reportes permitidos
   });
   const { toast } = useToast();
   const confirm = useConfirm();
@@ -44,21 +57,26 @@ export default function RolesPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const [rolesRes, modulosRes] = await Promise.all([
+      const [rolesRes, modulosRes, reportesRes] = await Promise.all([
         fetch("/api/roles", {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch("/api/modulos-v2/estructura", {
           headers: { Authorization: `Bearer ${token}` },
         }),
+        fetch("/api/reportes", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
 
-      const [rolesData, modulosData] = await Promise.all([
+      const [rolesData, modulosData, reportesData] = await Promise.all([
         rolesRes.json(),
         modulosRes.json(),
+        reportesRes.json(),
       ]);
 
       if (rolesData.success) setRoles(rolesData.data);
+      if (reportesData.success) setReportes(reportesData.data);
       if (modulosData.success) {
         // Construir permisos por relación padre-hijo
         const todosLosPermisos: any[] = [];
@@ -185,7 +203,7 @@ export default function RolesPage() {
 
         const permisos = modulos.map((m) => {
           const key = `${m.ModuloPadreId || 'null'}-${m.ModuloId}`;
-          const permiso = permisosMap.get(key);
+          const permiso: any = permisosMap.get(key);
           return {
             ModuloPadreId: m.ModuloPadreId,
             ModuloId: m.ModuloId,
@@ -217,6 +235,18 @@ export default function RolesPage() {
             PuedeConsultarTareas: false,
             PuedeVerMonitorTareas: false,
           },
+          PermisosConfig: data.data.PermisosConfig || {
+            HabilitarMenuConfig: false,
+            PermisosRoles: false,
+            PermisosUsuarios: false,
+            PermisosListas: false,
+            PermisosModulos: false,
+            PermisosParametros: false,
+            PermisosDashboard: false,
+            PermisosParametrosAV: false,
+            PermisosReportes: false,
+          },
+          Reportes: data.data.Reportes || [],
         });
         setShowModal(true);
       }
@@ -285,6 +315,18 @@ export default function RolesPage() {
         PuedeConsultarTareas: false,
         PuedeVerMonitorTareas: false,
       },
+      PermisosConfig: {
+        HabilitarMenuConfig: false,
+        PermisosRoles: false,
+        PermisosUsuarios: false,
+        PermisosListas: false,
+        PermisosModulos: false,
+        PermisosParametros: false,
+        PermisosDashboard: false,
+        PermisosParametrosAV: false,
+        PermisosReportes: false,
+      },
+      Reportes: [],
     });
   };
 
@@ -615,6 +657,288 @@ export default function RolesPage() {
                           </p>
                         </div>
                       </Label>
+                    </div>
+                  )}                </div>
+
+                {/* Permisos de Configuración */}
+                <div className="space-y-3 border rounded-md p-4 bg-gray-50 dark:bg-gray-900">
+                  <Label className="text-base font-semibold">Permisos del Menú de Configuración</Label>
+                  
+                  {/* Habilitar Menú Config - Master Toggle */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.PermisosConfig.HabilitarMenuConfig}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            PermisosConfig: {
+                              ...formData.PermisosConfig,
+                              HabilitarMenuConfig: e.target.checked,
+                              // Si se deshabilita, deshabilitar todos los sub-permisos
+                              PermisosRoles: e.target.checked ? formData.PermisosConfig.PermisosRoles : false,
+                              PermisosUsuarios: e.target.checked ? formData.PermisosConfig.PermisosUsuarios : false,
+                              PermisosListas: e.target.checked ? formData.PermisosConfig.PermisosListas : false,
+                              PermisosModulos: e.target.checked ? formData.PermisosConfig.PermisosModulos : false,
+                              PermisosParametros: e.target.checked ? formData.PermisosConfig.PermisosParametros : false,
+                              PermisosDashboard: e.target.checked ? formData.PermisosConfig.PermisosDashboard : false,
+                              PermisosParametrosAV: e.target.checked ? formData.PermisosConfig.PermisosParametrosAV : false,
+                              PermisosReportes: e.target.checked ? formData.PermisosConfig.PermisosReportes : false,
+                            },
+                          })
+                        }
+                        className="w-4 h-4"
+                      />
+                      <span className="font-semibold">Habilitar Menú de Configuración</span>
+                    </Label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">
+                      {formData.PermisosConfig.HabilitarMenuConfig 
+                        ? 'Los usuarios con este rol pueden acceder al menú de configuración'
+                        : 'Los usuarios con este rol NO verán el menú de configuración en el sidebar'}
+                    </p>
+                  </div>
+
+                  {/* Sub-permisos - Solo visibles si HabilitarMenuConfig está activo */}
+                  {formData.PermisosConfig.HabilitarMenuConfig && (
+                    <div className="ml-6 space-y-3 border-l-2 border-purple-500 pl-4">
+                      <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">
+                        Seleccione las opciones del menú de configuración que estarán disponibles:
+                      </p>
+                      
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosConfig.PermisosRoles}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosConfig: {
+                                ...formData.PermisosConfig,
+                                PermisosRoles: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Roles</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a gestión de roles y permisos
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosConfig.PermisosUsuarios}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosConfig: {
+                                ...formData.PermisosConfig,
+                                PermisosUsuarios: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Usuarios</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a gestión de usuarios del sistema
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosConfig.PermisosListas}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosConfig: {
+                                ...formData.PermisosConfig,
+                                PermisosListas: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Listas</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a gestión de listas dinámicas
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosConfig.PermisosModulos}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosConfig: {
+                                ...formData.PermisosConfig,
+                                PermisosModulos: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Módulos</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a configuración de módulos del sistema
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosConfig.PermisosParametros}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosConfig: {
+                                ...formData.PermisosConfig,
+                                PermisosParametros: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Parámetros</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a parámetros generales del sistema
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosConfig.PermisosDashboard}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosConfig: {
+                                ...formData.PermisosConfig,
+                                PermisosDashboard: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Dashboard</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a configuración de dashboards por rol
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosConfig.PermisosParametrosAV}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosConfig: {
+                                ...formData.PermisosConfig,
+                                PermisosParametrosAV: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Parámetros AV</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a parámetros de asistente virtual
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.PermisosConfig.PermisosReportes}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              PermisosConfig: {
+                                ...formData.PermisosConfig,
+                                PermisosReportes: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span>Reportes</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Acceso a configuración de reportes dinámicos
+                          </p>
+                        </div>
+                      </Label>
+                    </div>
+                  )}
+                </div>
+
+                {/* Permisos de Reportes */}
+                <div className="space-y-3 border rounded-md p-4 bg-gray-50 dark:bg-gray-900">
+                  <Label className="text-base font-semibold">Reportes Permitidos</Label>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">
+                    Seleccione los reportes que los usuarios con este rol podrán visualizar en el menú principal.
+                  </p>
+                  
+                  {reportes.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                      No hay reportes creados. Cree reportes en el menú de Configuración &gt; Reportes.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {reportes.map((reporte) => (
+                        <Label key={reporte.Id} className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+                          <input
+                            type="checkbox"
+                            checked={formData.Reportes.includes(reporte.Id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({
+                                  ...formData,
+                                  Reportes: [...formData.Reportes, reporte.Id],
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  Reportes: formData.Reportes.filter((id) => id !== reporte.Id),
+                                });
+                              }
+                            }}
+                            className="w-4 h-4"
+                          />
+                          <div className="flex-1">
+                            <span className="font-medium">{reporte.Nombre}</span>
+                            {reporte.Descripcion && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {reporte.Descripcion}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-400 dark:text-gray-500">
+                              Tipo: {reporte.Tipo}
+                            </p>
+                          </div>
+                        </Label>
+                      ))}
                     </div>
                   )}
                 </div>

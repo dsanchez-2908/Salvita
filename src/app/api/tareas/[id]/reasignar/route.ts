@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, execute } from "@/lib/db";
-import { getUserFromRequest } from "@/lib/auth";
+import { getUserFromRequest, registrarTraza } from "@/lib/auth";
 
 // POST /api/tareas/[id]/reasignar - Reasignar una tarea
 export async function POST(
@@ -81,9 +81,9 @@ export async function POST(
     // }
 
     // Verificar que la tarea no esté finalizada o rechazada
-    if (["Finalizada", "Rechazada"].includes(tarea.Estado)) {
+    if (["Completada", "Rechazada"].includes(tarea.Estado)) {
       return NextResponse.json(
-        { success: false, message: "No se puede reasignar una tarea finalizada o rechazada" },
+        { success: false, message: "No se puede reasignar una tarea completada o rechazada" },
         { status: 400 }
       );
     }
@@ -195,6 +195,23 @@ export async function POST(
         usuario: user.usuario,
         detalle: detalleHistorial,
       }
+    );
+    
+    // Obtener datos de la tarea para la traza
+    const tareaInfo = await query(
+      `SELECT pt.Nombre as PlantillaNombre 
+       FROM TD_TAREAS t
+       INNER JOIN TD_PLANTILLA_TAREAS pt ON t.PlantillaTareaId = pt.Id
+       WHERE t.Id = @tareaId`,
+      { tareaId }
+    );
+    
+    // Registrar traza de auditoría
+    await registrarTraza(
+      user.userId,
+      'Reasignar',
+      'Tareas',
+      `Tarea reasignada - Plantilla: "${tareaInfo[0]?.PlantillaNombre || 'Desconocida'}" - ${detalleHistorial}`
     );
 
     return NextResponse.json({

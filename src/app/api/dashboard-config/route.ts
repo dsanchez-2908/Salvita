@@ -106,8 +106,10 @@ export async function POST(request: NextRequest) {
       
       await execute(
         `INSERT INTO TD_DASHBOARD_CONFIG 
-         (RolId, Tipo, ModuloId, TipoVisualizacion, CampoAgrupamiento, CampoFiltro, ValorFiltro, FiltroOperador, FiltroActivo, TareasTipoVisualizacion, TareasCategoria, Orden, UsuarioCreacion)
-         VALUES (@rolId, @tipo, @moduloId, @tipoVisualizacion, @campoAgrupamiento, @campoFiltro, @valorFiltro, @filtroOperador, @filtroActivo, @tareasTipoVisualizacion, @tareasCategoria, @orden, @usuarioCreacion)`,
+         (RolId, Tipo, ModuloId, TipoVisualizacion, CampoAgrupamiento, CampoFiltro, ValorFiltro, FiltroOperador, FiltroActivo, 
+          TipoGrafico, TareasTipoVisualizacion, TareasCategoria, TareasMostrarComo, Orden, UsuarioCreacion)
+         VALUES (@rolId, @tipo, @moduloId, @tipoVisualizacion, @campoAgrupamiento, @campoFiltro, @valorFiltro, @filtroOperador, @filtroActivo,
+          @tipoGrafico, @tareasTipoVisualizacion, @tareasCategoria, @tareasMostrarComo, @orden, @usuarioCreacion)`,
         {
           rolId: RolId,
           tipo: config.Tipo || 'Modulos',
@@ -118,8 +120,10 @@ export async function POST(request: NextRequest) {
           valorFiltro: config.ValorFiltro || null,
           filtroOperador: config.FiltroOperador || null,
           filtroActivo: config.FiltroActivo !== undefined ? config.FiltroActivo : null,
+          tipoGrafico: config.TipoGrafico || null,
           tareasTipoVisualizacion: config.TareasTipoVisualizacion || null,
           tareasCategoria: config.TareasCategoria || null,
+          tareasMostrarComo: config.TareasMostrarComo || null,
           orden: i,
           usuarioCreacion: user.usuario,
         }

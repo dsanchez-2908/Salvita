@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { getUserFromRequest } from "@/lib/auth";
+import { getUserFromRequest, registrarTraza } from "@/lib/auth";
 
 interface ApiResponse {
   success: boolean;
@@ -116,6 +116,14 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Agregar',
+      'Administración de Tareas',
+      `Plantilla creada: "${Nombre}" - Estado: ${Estado || 'Activo'}${Indicaciones ? ` - Indicaciones: ${Indicaciones.substring(0, 100)}` : ''}`
+    );
+
     return NextResponse.json<ApiResponse>({
       success: true,
       data: { Id: resultado[0].Id },
@@ -177,6 +185,12 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // Obtener datos anteriores para la traza
+    const datosAnteriores = await query(
+      `SELECT Nombre, Indicaciones, Estado FROM TD_PLANTILLA_TAREAS WHERE Id = @id`,
+      { id: Id }
+    );
+
     // Actualizar plantilla
     await query(
       `UPDATE TD_PLANTILLA_TAREAS 
@@ -193,6 +207,19 @@ export async function PUT(request: NextRequest) {
         estado: Estado || "Activo",
         usuario: user.usuario,
       }
+    );
+
+    // Registrar traza con cambios
+    const cambios = [];
+    if (datosAnteriores[0].Nombre !== Nombre) cambios.push(`Nombre: "${datosAnteriores[0].Nombre}" → "${Nombre}"`);
+    if (datosAnteriores[0].Estado !== Estado) cambios.push(`Estado: ${datosAnteriores[0].Estado} → ${Estado}`);
+    if (datosAnteriores[0].Indicaciones !== Indicaciones) cambios.push(`Indicaciones modificadas`);
+    
+    await registrarTraza(
+      user.userId,
+      'Modificar',
+      'Administración de Tareas',
+      `Plantilla modificada: "${Nombre}" - Cambios: ${cambios.length > 0 ? cambios.join(', ') : 'Sin cambios'}`
     );
 
     return NextResponse.json<ApiResponse>({
@@ -245,10 +272,24 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Obtener datos de la plantilla antes de eliminar
+    const plantilla = await query(
+      `SELECT Nombre FROM TD_PLANTILLA_TAREAS WHERE Id = @id`,
+      { id: parseInt(id) }
+    );
+
     // Eliminar la plantilla
     await query(`DELETE FROM TD_PLANTILLA_TAREAS WHERE Id = @id`, {
       id: parseInt(id),
     });
+
+    // Registrar traza
+    await registrarTraza(
+      user.userId,
+      'Eliminar',
+      'Administración de Tareas',
+      `Plantilla eliminada: "${plantilla[0]?.Nombre || 'Desconocida'}"`
+    );
 
     return NextResponse.json<ApiResponse>({
       success: true,

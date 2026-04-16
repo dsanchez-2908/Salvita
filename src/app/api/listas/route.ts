@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      let valores = [];
+      let valores: any[] = [];
       const listaData = lista[0];
 
       // Obtener valores según el tipo de lista

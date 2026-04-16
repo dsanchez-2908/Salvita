@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Shield, List, Folder, BarChart3, Table2, Calculator } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { ChartComponent } from "@/components/ChartComponent";
 
 interface DashboardConfig {
   Id: number;
@@ -11,15 +12,17 @@ interface DashboardConfig {
   // Campos para Widgets de Módulos
   ModuloId?: number;
   ModuloNombre?: string;
-  TipoVisualizacion?: "Agrupamiento" | "DetalleFiltrado" | "Totalizado";
+  TipoVisualizacion?: "Agrupamiento" | "DetalleFiltrado" | "Totalizado" | "Grafico";
   CampoAgrupamiento?: string | null;
   CampoFiltro?: string | null;
   ValorFiltro?: string | null;
   FiltroOperador?: string | null;
   FiltroActivo?: boolean;
+  TipoGrafico?: "Torta" | "Barras" | null;
   // Campos para Widgets de Tareas
   TareasTipoVisualizacion?: "PendientesPropios" | "PendientesTotales" | null;
   TareasCategoria?: "BandejaPersonal" | "BandejasGrupal" | null;
+  TareasMostrarComo?: "Cantidades" | "Grafico" | null;
 }
 
 interface WidgetData {
@@ -249,6 +252,45 @@ export default function DashboardPage() {
     );
   };
 
+  const renderWidgetGrafico = (widget: WidgetData) => {
+    const { config, agrupados, filtroAplicado } = widget;
+    
+    if (!config.TipoGrafico) {
+      return null;
+    }
+
+    // Transformar datos al formato esperado por el componente de gráficos
+    const chartData = agrupados?.map((item: any) => ({
+      name: item[config.CampoAgrupamiento!] || "Sin valor",
+      value: item.Total
+    })) || [];
+    
+    return (
+      <Card key={config.Id}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-blue-600" />
+            <CardTitle className="text-lg">{config.ModuloNombre}</CardTitle>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Gráfico {config.TipoGrafico} - Agrupado por {config.CampoAgrupamiento}
+          </p>
+          {filtroAplicado && (
+            <p className="text-xs text-gray-500">
+              Filtrado: {filtroAplicado}
+            </p>
+          )}
+        </CardHeader>
+        <CardContent>
+          <ChartComponent 
+            data={chartData} 
+            type={config.TipoGrafico}
+          />
+        </CardContent>
+      </Card>
+    );
+  };
+
   const renderWidgetDetalleFiltrado = (widget: WidgetData) => {
     const { config, registros, campos, nombreValorFiltro } = widget;
     
@@ -349,6 +391,35 @@ export default function DashboardPage() {
   const renderWidgetTareasPendientesPropiosBandejaPersonal = (widget: WidgetData) => {
     const data = widget.tareasData || {};
     
+    // Si se debe mostrar como gráfico
+    if (widget.config.TareasMostrarComo === "Grafico" && widget.config.TipoGrafico) {
+      const chartData = [
+        { name: "Pendientes", value: data.TotalPendientes || 0 },
+        { name: "Vencidas", value: data.TotalVencidas || 0 }
+      ].filter(item => item.value > 0); // Filtrar valores en 0
+
+      return (
+        <Card key={widget.config.Id}>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-orange-600" />
+              <CardTitle className="text-lg">Mis Tareas Pendientes</CardTitle>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Bandeja Personal - Gráfico {widget.config.TipoGrafico}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ChartComponent 
+              data={chartData} 
+              type={widget.config.TipoGrafico}
+            />
+          </CardContent>
+        </Card>
+      );
+    }
+    
+    // Mostrar como cantidades (comportamiento por defecto)
     return (
       <Card key={widget.config.Id}>
         <CardHeader>
@@ -379,36 +450,76 @@ export default function DashboardPage() {
   };
 
   const renderWidgetTareasPendientesPropiosBandejasGrupal = (widget: WidgetData) => {
-    const data = widget.tareasData || {};
+    const bandejas = Array.isArray(widget.tareasData) ? widget.tareasData : [];
     
+    // Si se debe mostrar como gráfico
+    if (widget.config.TareasMostrarComo === "Grafico" && widget.config.TipoGrafico) {
+      const chartData = bandejas.map((bandeja: any) => ({
+        name: bandeja.BandejaNombre,
+        value: bandeja.TotalPendientes || 0
+      }));
+
+      return (
+        <Card key={widget.config.Id} className="col-span-full">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-blue-600" />
+              <CardTitle className="text-lg">Tareas en Mis Bandejas</CardTitle>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Bandejas grupales - Gráfico {widget.config.TipoGrafico}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ChartComponent 
+              data={chartData} 
+              type={widget.config.TipoGrafico}
+            />
+          </CardContent>
+        </Card>
+      );
+    }
+    
+    // Mostrar como cantidades (comportamiento por defecto)
     return (
-      <Card key={widget.config.Id}>
+      <Card key={widget.config.Id} className="col-span-full">
         <CardHeader>
           <div className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-blue-600" />
             <CardTitle className="text-lg">Tareas en Mis Bandejas</CardTitle>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Todas las bandejas grupales
+            Bandejas grupales asignadas
           </p>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
-              <span className="font-medium">Total Pendientes</span>
-              <span className="text-2xl font-bold text-blue-600">{data.TotalPendientes || 0}</span>
+          {bandejas.length > 0 ? (
+            <div className="space-y-3">
+              {bandejas.map((bandeja: any) => (
+                <div key={bandeja.BandejaId} className="p-4 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                  <div className="font-semibold text-lg mb-3">{bandeja.BandejaNombre}</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
+                      <span className="text-sm font-medium">Total Pendientes</span>
+                      <span className="text-2xl font-bold text-blue-600">{bandeja.TotalPendientes || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded">
+                      <span className="text-sm font-medium">Tomadas por mí</span>
+                      <span className="text-2xl font-bold text-green-600">{bandeja.TotalTomadasPorMi || 0}</span>
+                    </div>
+                  </div>
+                  {bandeja.TotalVencidas > 0 && (
+                    <div className="mt-2 flex items-center justify-between p-2 bg-red-50 dark:bg-red-900/20 rounded border border-red-200">
+                      <span className="text-sm font-medium text-red-700">Vencidas</span>
+                      <span className="text-xl font-bold text-red-600">{bandeja.TotalVencidas}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-            <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded">
-              <span className="font-medium">Tomadas por mí</span>
-              <span className="text-2xl font-bold text-green-600">{data.TomadasPorMi || 0}</span>
-            </div>
-            {data.TotalVencidas > 0 && (
-              <div className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-200">
-                <span className="font-medium text-red-700">Vencidas</span>
-                <span className="text-2xl font-bold text-red-600">{data.TotalVencidas}</span>
-              </div>
-            )}
-          </div>
+          ) : (
+            <p className="text-center text-gray-500 py-4">No hay bandejas grupales asignadas</p>
+          )}
         </CardContent>
       </Card>
     );
@@ -417,6 +528,35 @@ export default function DashboardPage() {
   const renderWidgetTareasPendientesTotalesBandejaPersonal = (widget: WidgetData) => {
     const data = widget.tareasData || [];
     
+    // Si se debe mostrar como gráfico
+    if (widget.config.TareasMostrarComo === "Grafico" && widget.config.TipoGrafico) {
+      const chartData = data.slice(0, 10).map((row: any) => ({
+        name: row.Usuario,
+        value: row.TotalPendientes || 0
+      }));
+
+      return (
+        <Card key={widget.config.Id} className="col-span-full">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-purple-600" />
+              <CardTitle className="text-lg">Tareas Pendientes por Usuario</CardTitle>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Bandejas personales - Gráfico {widget.config.TipoGrafico}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ChartComponent 
+              data={chartData} 
+              type={widget.config.TipoGrafico}
+            />
+          </CardContent>
+        </Card>
+      );
+    }
+    
+    // Mostrar como cantidades (comportamiento por defecto)
     return (
       <Card key={widget.config.Id} className="col-span-full">
         <CardHeader>
@@ -475,6 +615,35 @@ export default function DashboardPage() {
   const renderWidgetTareasPendientesTotalesBandejasGrupal = (widget: WidgetData) => {
     const data = widget.tareasData || [];
     
+    // Si se debe mostrar como gráfico
+    if (widget.config.TareasMostrarComo === "Grafico" && widget.config.TipoGrafico) {
+      const chartData = data.slice(0, 10).map((row: any) => ({
+        name: row.BandejaNombre,
+        value: row.TotalPendientes || 0
+      }));
+
+      return (
+        <Card key={widget.config.Id} className="col-span-full">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Folder className="h-5 w-5 text-indigo-600" />
+              <CardTitle className="text-lg">Tareas Pendientes por Bandeja</CardTitle>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Bandejas grupales - Gráfico {widget.config.TipoGrafico}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ChartComponent 
+              data={chartData} 
+              type={widget.config.TipoGrafico}
+            />
+          </CardContent>
+        </Card>
+      );
+    }
+    
+    // Mostrar como cantidades (comportamiento por defecto)
     return (
       <Card key={widget.config.Id} className="col-span-full">
         <CardHeader>
@@ -645,6 +814,8 @@ return (
               return renderWidgetDetalleFiltrado(widget);
             } else if (widget.config.TipoVisualizacion === "Totalizado") {
               return renderWidgetTotalizado(widget);
+            } else if (widget.config.TipoVisualizacion === "Grafico") {
+              return renderWidgetGrafico(widget);
             }
           }
           // Widgets de Tareas

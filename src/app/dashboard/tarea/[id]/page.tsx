@@ -111,6 +111,25 @@ interface Comentario {
   FechaHora: string;
 }
 
+// Función helper para decodificar el JWT y obtener el userId
+function getUserIdFromToken(): number | null {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+    
+    // Decodificar JWT (formato: header.payload.signature)
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    
+    // Decodificar la parte del payload (base64url)
+    const payload = JSON.parse(atob(parts[1]));
+    return payload.userId || null;
+  } catch (error) {
+    console.error("Error al decodificar token:", error);
+    return null;
+  }
+}
+
 export default function TareaDetallePage() {
   const router = useRouter();
   const params = useParams();
@@ -130,6 +149,7 @@ export default function TareaDetallePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("informacion");
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
   // Estados para diálogos
   const [showCompletarDialog, setShowCompletarDialog] = useState(false);
@@ -145,6 +165,12 @@ export default function TareaDetallePage() {
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [bandejas, setBandejas] = useState<any[]>([]);
   const [destinatarioSeleccionado, setDestinatarioSeleccionado] = useState<string>("");
+
+  // Cargar userId del token al montar el componente
+  useEffect(() => {
+    const userId = getUserIdFromToken();
+    setCurrentUserId(userId);
+  }, []);
 
   useEffect(() => {
     if (tareaId) {
@@ -594,6 +620,24 @@ export default function TareaDetallePage() {
     }
   };
 
+  // Función helper para determinar si el usuario puede realizar acciones sobre la tarea
+  const puedeRealizarAcciones = (): boolean => {
+    if (!tarea || !currentUserId) return false;
+    
+    // Si la tarea está Tomada, solo quien la tomó puede realizar acciones
+    if (tarea.Estado === 'Tomada') {
+      return tarea.UsuarioTomadaPorId === currentUserId;
+    }
+    
+    // Si la tarea está Pendiente y es asignación directa a usuario, solo ese usuario puede actuar
+    if (tarea.Estado === 'Pendiente' && tarea.TipoAsignacion === 'Usuario') {
+      return tarea.UsuarioAsignadoId === currentUserId;
+    }
+    
+    // Para otros casos (ej. Pendiente en Bandeja), cualquiera con acceso puede actuar
+    return true;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -912,6 +956,11 @@ export default function TareaDetallePage() {
           <Card>
             <CardHeader>
               <CardTitle>Agregar Comentario</CardTitle>
+              {!puedeRealizarAcciones() && (
+                <CardDescription className="text-yellow-600">
+                  Solo el usuario que tomó la tarea puede agregar comentarios
+                </CardDescription>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               <Textarea
@@ -919,10 +968,11 @@ export default function TareaDetallePage() {
                 value={nuevoComentario}
                 onChange={(e) => setNuevoComentario(e.target.value)}
                 rows={3}
+                disabled={!puedeRealizarAcciones()}
               />
               <Button 
                 onClick={handleAgregarComentario} 
-                disabled={procesando || !nuevoComentario.trim()}
+                disabled={procesando || !nuevoComentario.trim() || !puedeRealizarAcciones()}
               >
                 <MessageSquare className="mr-2 h-4 w-4" />
                 Agregar Comentario
@@ -1017,8 +1067,8 @@ export default function TareaDetallePage() {
               </Button>
             )}
             
-            {/* Botones Completar/Rechazar: para tareas Tomadas O para tareas de Usuario en Pendiente */}
-            {(tarea.Estado === "Tomada" || (tarea.Estado === "Pendiente" && tarea.TipoAsignacion === "Usuario")) && (
+            {/* Botones Completar/Rechazar: solo si el usuario puede realizar acciones */}
+            {!modoConsulta && puedeRealizarAcciones() && (tarea.Estado === "Tomada" || (tarea.Estado === "Pendiente" && tarea.TipoAsignacion === "Usuario")) && (
               <>
                 <Button 
                   onClick={() => setShowCompletarDialog(true)} 

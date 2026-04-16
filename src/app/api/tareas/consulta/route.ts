@@ -63,12 +63,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (fechaFinalizacionDesde) {
-      whereClauses.push("CAST(t.FechaFinalizacion AS DATE) >= @fechaFinalizacionDesde");
+      whereClauses.push("CAST(COALESCE(t.FechaCompletado, t.FechaRechazo) AS DATE) >= @fechaFinalizacionDesde");
       params.fechaFinalizacionDesde = fechaFinalizacionDesde;
     }
 
     if (fechaFinalizacionHasta) {
-      whereClauses.push("CAST(t.FechaFinalizacion AS DATE) <= @fechaFinalizacionHasta");
+      whereClauses.push("CAST(COALESCE(t.FechaCompletado, t.FechaRechazo) AS DATE) <= @fechaFinalizacionHasta");
       params.fechaFinalizacionHasta = fechaFinalizacionHasta;
     }
 
@@ -91,17 +91,17 @@ export async function GET(request: NextRequest) {
     // Filtro de vencidas (calculado en SQL)
     if (vencida === "SI") {
       whereClauses.push(`(
-        (t.Estado NOT IN ('Finalizada', 'Rechazada') AND t.FechaVencimiento IS NOT NULL AND t.FechaVencimiento < GETDATE())
+        (t.Estado NOT IN ('Completada', 'Rechazada') AND t.FechaVencimiento IS NOT NULL AND t.FechaVencimiento < GETDATE())
         OR
-        (t.Estado IN ('Finalizada', 'Rechazada') AND t.FechaVencimiento IS NOT NULL AND t.FechaFinalizacion > t.FechaVencimiento)
+        (t.Estado IN ('Completada', 'Rechazada') AND t.FechaVencimiento IS NOT NULL AND COALESCE(t.FechaCompletado, t.FechaRechazo) > t.FechaVencimiento)
       )`);
     } else if (vencida === "NO") {
       whereClauses.push(`(
         (t.FechaVencimiento IS NULL)
         OR
-        (t.Estado NOT IN ('Finalizada', 'Rechazada') AND t.FechaVencimiento >= GETDATE())
+        (t.Estado NOT IN ('Completada', 'Rechazada') AND t.FechaVencimiento >= GETDATE())
         OR
-        (t.Estado IN ('Finalizada', 'Rechazada') AND t.FechaFinalizacion <= t.FechaVencimiento)
+        (t.Estado IN ('Completada', 'Rechazada') AND COALESCE(t.FechaCompletado, t.FechaRechazo) <= t.FechaVencimiento)
       )`);
     }
 
@@ -118,7 +118,9 @@ export async function GET(request: NextRequest) {
         pt.Nombre as PlantillaNombre,
         t.FechaCreacion,
         t.FechaVencimiento,
-        t.FechaFinalizacion,
+        COALESCE(t.FechaCompletado, t.FechaRechazo) as FechaFinalizacion,
+        t.FechaCompletado,
+        t.FechaRechazo,
         t.UsuarioCreacion,
         t.CreadoPor as UsuarioCreacionId,
         uCreacion.Nombre as UsuarioCreacionNombre,
@@ -141,8 +143,8 @@ export async function GET(request: NextRequest) {
         (SELECT COUNT(*) FROM TR_TAREA_REGISTRO WHERE TareaId = t.Id) as TotalRegistros,
         -- Indicador de vencida
         CASE 
-          WHEN t.Estado NOT IN ('Finalizada', 'Rechazada') AND t.FechaVencimiento IS NOT NULL AND t.FechaVencimiento < GETDATE() THEN 1
-          WHEN t.Estado IN ('Finalizada', 'Rechazada') AND t.FechaVencimiento IS NOT NULL AND t.FechaFinalizacion > t.FechaVencimiento THEN 1
+          WHEN t.Estado NOT IN ('Completada', 'Rechazada') AND t.FechaVencimiento IS NOT NULL AND t.FechaVencimiento < GETDATE() THEN 1
+          WHEN t.Estado IN ('Completada', 'Rechazada') AND t.FechaVencimiento IS NOT NULL AND COALESCE(t.FechaCompletado, t.FechaRechazo) > t.FechaVencimiento THEN 1
           ELSE 0
         END as EsVencida
       FROM TD_TAREAS t

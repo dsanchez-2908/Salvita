@@ -113,7 +113,9 @@ export default function CrearTareaPage() {
         console.log("RegistroIds:", data.data.map((r: any) => r.RegistroId));
         
         await cargarCamposModulo(moduloId);
-        await cargarDatosRegistros(nombreTabla, data.data.map((r: any) => r.RegistroId), token);
+        if (token) {
+          await cargarDatosRegistros(nombreTabla, data.data.map((r: any) => r.RegistroId), token);
+        }
       }
     } catch (error) {
       console.error("Error:", error);
@@ -140,7 +142,7 @@ export default function CrearTareaPage() {
           .filter((c: Campo) => c.TipoDato === 'Lista' && c.ListaId)
           .map((c: Campo) => c.ListaId);
         
-        if (listasIds.length > 0) {
+        if (listasIds.length > 0 && token) {
           await cargarValoresListas([...new Set(listasIds)] as number[], token);
         }
       }

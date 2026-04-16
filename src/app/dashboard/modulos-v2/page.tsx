@@ -14,7 +14,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
-type TipoDato = "Texto" | "Descripcion" | "Numero" | "Decimal" | "Fecha" | "FechaHora" | "Lista" | "Archivo";
+type TipoDato = "Texto" | "Descripcion" | "Numero" | "Decimal" | "Fecha" | "FechaHora" | "Lista" | "Archivo" | "IDInterno";
 
 interface Campo {
   tempId: string;
@@ -988,7 +988,7 @@ export default function ModulosV2Page() {
                                       onChange={(e) => updateCampo(index, "Nombre", e.target.value)}
                                       placeholder="Nombre del campo"
                                       className="mt-1 dark:bg-gray-600 dark:border-gray-500 dark:text-white dark:placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                                      disabled={editingModuloId && camposExistentes.has(campo.Nombre)}
+                                      disabled={!!(editingModuloId && camposExistentes.has(campo.Nombre))}
                                       required
                                     />
                                   </div>
@@ -999,8 +999,9 @@ export default function ModulosV2Page() {
                                       value={campo.TipoDato}
                                       onChange={(e) => updateCampo(index, "TipoDato", e.target.value as TipoDato)}
                                       className="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 text-sm dark:bg-gray-600 dark:border-gray-500 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                      disabled={editingModuloId && camposExistentes.has(campo.Nombre)}
+                                      disabled={!!(editingModuloId && camposExistentes.has(campo.Nombre))}
                                     >
+                                      <option value="IDInterno">ID Interno</option>
                                       <option value="Texto">Texto</option>
                                       <option value="Descripcion">Descripción</option>
                                       <option value="Numero">Número</option>

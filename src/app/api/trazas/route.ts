@@ -54,7 +54,15 @@ export async function GET(req: NextRequest) {
         t.Accion,
         t.Proceso,
         t.Detalle
-      FROM TD_MODULO_TRAZAS t
+      FROM (
+        SELECT Id, FechaHora, UsuarioId, Usuario, Accion, Proceso, Detalle
+        FROM TD_TRAZAS
+        
+        UNION ALL
+        
+        SELECT Id, FechaHora, UsuarioId, Usuario, Accion, Proceso, Detalle
+        FROM TD_MODULO_TRAZAS
+      ) t
       WHERE 1=1
     `;
 
@@ -191,7 +199,7 @@ export async function POST(req: NextRequest) {
       .input("proceso", sql.NVarChar, proceso)
       .input("detalle", sql.NVarChar, detalle)
       .query(`
-        INSERT INTO TD_MODULO_TRAZAS (UsuarioId, Usuario, Accion, Proceso, Detalle)
+        INSERT INTO TD_TRAZAS (UsuarioId, Usuario, Accion, Proceso, Detalle)
         VALUES (@usuarioId, @usuario, @accion, @proceso, @detalle)
       `);
 

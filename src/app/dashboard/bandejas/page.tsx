@@ -169,7 +169,7 @@ export default function BandejasPage() {
   const handleDelete = async (id: number, nombre: string) => {
     const confirmed = await confirm({
       title: "Confirmar eliminación",
-      message: `¿Está seguro de eliminar la bandeja "${nombre}"?`,
+      description: `¿Está seguro de eliminar la bandeja "${nombre}"?`,
       confirmText: "Eliminar",
       cancelText: "Cancelar",
     });

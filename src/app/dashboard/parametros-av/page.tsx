@@ -151,7 +151,7 @@ export default function ParametrosAVPage() {
   const handleDelete = async (id: number) => {
     const confirmed = await confirm({
       title: "¿Eliminar configuración?",
-      message: "Esta acción no se puede deshacer.",
+      description: "Esta acción no se puede deshacer.",
     });
 
     if (!confirmed) return;

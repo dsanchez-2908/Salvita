@@ -340,7 +340,7 @@ export default function ModulosPage() {
 
         // Cargar campos del módulo
         if (modulo.Campos && modulo.Campos.length > 0) {
-          const nombresCampos = new Set(modulo.Campos.map((c: any) => c.Nombre));
+          const nombresCampos = new Set<string>(modulo.Campos.map((c: any) => c.Nombre as string));
           setCamposExistentes(nombresCampos);
           setCampos(
             modulo.Campos.map((campo: any) => ({

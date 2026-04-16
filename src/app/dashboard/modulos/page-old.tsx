@@ -27,13 +27,13 @@ export default function ModulosPage() {
     Orden: 1,
   });
 
-  const [campos, setCampos] = useState<(Omit<Campo, "CampoId" | "ModuloId"> & { tempId: string })[]>([
+  const [campos, setCampos] = useState<(Partial<Omit<Campo, "CampoId" | "ModuloId">> & { tempId: string; Nombre: string; TipoDato: string; Orden: number; Visible: boolean; VisibleEnGrilla: boolean; Obligatorio: boolean; })[]>([
     {
       tempId: crypto.randomUUID(),
       Nombre: "",
       TipoDato: "Texto",
       Largo: 100,
-      ListaId: null,
+      ListaId: undefined,
       Orden: 1,
       Visible: true,
       VisibleEnGrilla: true,
@@ -123,7 +123,7 @@ export default function ModulosPage() {
     const requestData: CreateModuloRequest = {
       Nombre: formData.Nombre,
       Tipo: formData.Tipo,
-      ModuloPrincipalId: formData.ModuloPadreId,
+      ModuloPrincipalId: formData.ModuloPadreId || undefined,
       Icono: formData.Icono,
       Orden: formData.Orden,
       Campos: campos.map(({ tempId, ...campo }) => campo),
@@ -182,7 +182,7 @@ export default function ModulosPage() {
         Nombre: "",
         TipoDato: "Texto",
         Largo: 100,
-        ListaId: null,
+        ListaId: undefined,
         Orden: 1,
         Visible: true,
         VisibleEnGrilla: true,
@@ -199,7 +199,7 @@ export default function ModulosPage() {
         Nombre: "",
         TipoDato: "Texto",
         Largo: 100,
-        ListaId: null,
+        ListaId: undefined,
         Orden: campos.length + 1,
         Visible: true,
         VisibleEnGrilla: true,
@@ -220,11 +220,11 @@ export default function ModulosPage() {
     // Si cambiamos el tipo de dato, resetear campos relacionados
     if (field === "TipoDato") {
       if (value === "Texto") {
-        newCampos[index] = { ...newCampos[index], TipoDato: value, Largo: 100, ListaId: null };
+        newCampos[index] = { ...newCampos[index], TipoDato: value, Largo: 100, ListaId: undefined };
       } else if (value === "Lista") {
-        newCampos[index] = { ...newCampos[index], TipoDato: value, Largo: null, ListaId: null };
+        newCampos[index] = { ...newCampos[index], TipoDato: value, Largo: undefined, ListaId: undefined };
       } else {
-        newCampos[index] = { ...newCampos[index], TipoDato: value, Largo: null, ListaId: null };
+        newCampos[index] = { ...newCampos[index], TipoDato: value, Largo: undefined, ListaId: undefined };
       }
     } else {
       newCampos[index] = { ...newCampos[index], [field]: value };
@@ -466,7 +466,7 @@ export default function ModulosPage() {
                               value={campo.ListaId || ""}
                               onChange={(e) => {
                                 const selectedValue = e.target.value;
-                                const newValue = selectedValue && selectedValue !== "" ? parseInt(selectedValue, 10) : null;
+                                const newValue = selectedValue && selectedValue !== "" ? parseInt(selectedValue, 10) : undefined;
                                 
                                 const updatedCampos = [...campos];
                                 updatedCampos[index] = { ...updatedCampos[index], ListaId: newValue };
@@ -574,7 +574,7 @@ export default function ModulosPage() {
                 </thead>
                 <tbody>
                   {modulos.map((modulo) => (
-                    <tr key={modulo.ModuloId} className="border-b hover:bg-gray-50">
+                    <tr key={modulo.Id} className="border-b hover:bg-gray-50">
                       <td className="p-3 font-medium">{modulo.Nombre}</td>
                       <td className="p-3">{modulo.Tipo}</td>
                       <td className="p-3">{modulo.Icono}</td>
@@ -584,7 +584,7 @@ export default function ModulosPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteModulo(modulo.ModuloId)}
+                          onClick={() => handleDeleteModulo(modulo.Id)}
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>

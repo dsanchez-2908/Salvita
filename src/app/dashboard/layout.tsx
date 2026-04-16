@@ -68,6 +68,7 @@ export default function DashboardLayout({
     PuedeConsultarTareas: false,
     PuedeVerMonitorTareas: false,
   });
+  const [reportes, setReportes] = useState<any[]>([]);
   const router = useRouter();
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
@@ -87,6 +88,7 @@ export default function DashboardLayout({
     verificarAccesoTrazas(token);
     loadBandejas(token);
     loadPermisosTareas(token);
+    loadReportes(token);
 
     // Escuchar evento de actualización de módulos
     const handleModulosUpdate = () => {
@@ -203,6 +205,21 @@ export default function DashboardLayout({
       }
     } catch (error) {
       console.error("Error cargando permisos de tareas:", error);
+    }
+  };
+
+  const loadReportes = async (token: string) => {
+    try {
+      const response = await fetch("/api/reportes?porRol=true", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        setReportes(data.data || []);
+      }
+    } catch (error) {
+      console.error("Error cargando reportes:", error);
     }
   };
 
@@ -345,6 +362,16 @@ export default function DashboardLayout({
                         Dashboard
                       </Button>
                     </Link>
+                    <Link href="/dashboard/reportes">
+                      <Button
+                        variant={pathname === "/dashboard/reportes" ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        size="sm"
+                      >
+                        <BarChart3 className="mr-2 h-4 w-4" />
+                        Reportes
+                      </Button>
+                    </Link>
                     <Link href="/dashboard/parametros-av">
                       <Button
                         variant={pathname === "/dashboard/parametros-av" ? "secondary" : "ghost"}
@@ -397,6 +424,18 @@ export default function DashboardLayout({
 
             {/* Separador */}
             <div className="my-4 border-t border-gray-200 dark:border-gray-700"></div>
+
+            {/* Sección de Tareas */}
+            {(isAdmin || (permisosTareas.HabilitarTareas && (
+              permisosTareas.PuedeAdministracionTareas ||
+              permisosTareas.AdministracionBandejas ||
+              permisosTareas.PuedeConsultarTareas ||
+              permisosTareas.PuedeVerMonitorTareas
+            ))) && (
+              <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                TAREAS
+              </div>
+            )}
 
             {/* Menú de Tareas - Visible si tiene al menos un permiso activo */}
             {(isAdmin || (permisosTareas.HabilitarTareas && (
@@ -523,6 +562,32 @@ export default function DashboardLayout({
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Separador */}
+            {reportes.length > 0 && (
+              <div className="my-4 border-t border-gray-200 dark:border-gray-700"></div>
+            )}
+
+            {/* Menú de Reportes */}
+            {reportes.length > 0 && (
+              <div>
+                <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  REPORTES
+                </div>
+                {reportes.map((reporte) => (
+                  <Link key={reporte.Id} href={`/dashboard/reporte/${reporte.Id}`}>
+                    <Button
+                      variant={pathname === `/dashboard/reporte/${reporte.Id}` ? "secondary" : "ghost"}
+                      className="w-full justify-start"
+                      size="sm"
+                    >
+                      <BarChart3 className="mr-2 h-4 w-4" />
+                      {reporte.Nombre}
+                    </Button>
+                  </Link>
+                ))}
               </div>
             )}
 

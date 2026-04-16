@@ -243,15 +243,24 @@ export default function TrazasPage() {
   const getAccionColor = (accion: string) => {
     switch (accion) {
       case "Agregar":
+      case "Crear":
         return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
       case "Modificar":
         return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
       case "Eliminar":
         return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
       case "Asociar":
+      case "Tomar":
         return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
       case "Desasociar":
+      case "Reasignar":
         return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200";
+      case "Completar":
+        return "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200";
+      case "Rechazar":
+        return "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200";
+      case "Comentar":
+        return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200";
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
     }
@@ -316,6 +325,9 @@ export default function TrazasPage() {
                   <option value="Módulos">Configuración Módulos</option>
                   <option value="Parámetros">Parámetros</option>
                   <option value="Modulos">Módulos</option>
+                  <option value="Administración de Tareas">Administración de Tareas</option>
+                  <option value="Administración de Bandejas">Administración de Bandejas</option>
+                  <option value="Tareas">Tareas</option>
                 </select>
               </div>
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, execute } from "@/lib/db";
-import { getUserFromRequest } from "@/lib/auth";
+import { getUserFromRequest, registrarTraza } from "@/lib/auth";
 
 // GET /api/tareas/[id]/comentarios - Obtener comentarios de una tarea
 export async function GET(
@@ -86,9 +86,9 @@ export async function POST(
       );
     }
 
-    // Verificar que la tarea existe
+    // Verificar que la tarea existe y obtener sus datos
     const tareaResult = await query(
-      `SELECT Id FROM TD_TAREAS WHERE Id = @tareaId`,
+      `SELECT * FROM TD_TAREAS WHERE Id = @tareaId`,
       { tareaId }
     );
 
@@ -96,6 +96,17 @@ export async function POST(
       return NextResponse.json(
         { success: false, message: "Tarea no encontrada" },
         { status: 404 }
+      );
+    }
+
+    const tarea = tareaResult[0];
+
+    // Validar que el usuario puede realizar la acción
+    const puedeRealizarAccion = verificarPuedeRealizarAccion(user.userId, tarea);
+    if (!puedeRealizarAccion) {
+      return NextResponse.json(
+        { success: false, message: "Solo el usuario que tomó la tarea puede agregar comentarios" },
+        { status: 403 }
       );
     }
 
@@ -123,6 +134,23 @@ export async function POST(
         detalle: comentario.trim().substring(0, 100) + (comentario.trim().length > 100 ? '...' : ''),
       }
     );
+    
+    // Obtener datos de la tarea para la traza
+    const tareaInfo = await query(
+      `SELECT pt.Nombre as PlantillaNombre 
+       FROM TD_TAREAS t
+       INNER JOIN TD_PLANTILLA_TAREAS pt ON t.PlantillaTareaId = pt.Id
+       WHERE t.Id = @tareaId`,
+      { tareaId }
+    );
+    
+    // Registrar traza de auditoría
+    await registrarTraza(
+      user.userId,
+      'Comentar',
+      'Tareas',
+      `Comentario agregado - Plantilla: "${tareaInfo[0]?.PlantillaNombre || 'Desconocida'}" - Comentario: ${comentario.trim().substring(0, 100)}`
+    );
 
     return NextResponse.json({
       success: true,
@@ -136,4 +164,20 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+// Función auxiliar para verificar si el usuario puede realizar acciones sobre la tarea
+function verificarPuedeRealizarAccion(userId: number, tarea: any): boolean {
+  // Si la tarea está Tomada, solo quien la tomó puede realizar acciones
+  if (tarea.Estado === 'Tomada') {
+    return tarea.UsuarioTomadaPorId === userId;
+  }
+
+  // Si la tarea está Pendiente y es asignación directa a usuario, solo ese usuario puede actuar
+  if (tarea.Estado === 'Pendiente' && tarea.TipoAsignacion === 'Usuario') {
+    return tarea.UsuarioAsignadoId === userId;
+  }
+
+  // Para otros casos (ej. Pendiente en Bandeja), cualquiera con acceso puede actuar
+  return true;
 }

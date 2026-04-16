@@ -50,12 +50,26 @@ export async function GET(request: NextRequest) {
         { rolId: parseInt(id) }
       );
 
+      // Obtener permisos de configuración
+      const permisosConfig = await query(
+        `SELECT * FROM TR_ROL_CONFIG_PERMISO WHERE RolId = @rolId`,
+        { rolId: parseInt(id) }
+      );
+
+      // Obtener reportes asignados al rol
+      const reportes = await query(
+        `SELECT ReporteId FROM TR_ROL_REPORTE WHERE RolId = @rolId`,
+        { rolId: parseInt(id) }
+      );
+
       return NextResponse.json<ApiResponse>({
         success: true,
         data: { 
           ...rol[0], 
           Permisos: permisos,
-          PermisosTareas: permisosTareas.length > 0 ? permisosTareas[0] : null
+          PermisosTareas: permisosTareas.length > 0 ? permisosTareas[0] : null,
+          PermisosConfig: permisosConfig.length > 0 ? permisosConfig[0] : null,
+          Reportes: reportes.map((r: any) => r.ReporteId),
         },
       });
     }
@@ -90,7 +104,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: CreateRolRequest = await request.json();
-    const { Nombre, Descripcion, Permisos, AccesoTrazas, PermisosTareas } = body;
+    const { Nombre, Descripcion, Permisos, AccesoTrazas, PermisosTareas, PermisosConfig, Reportes } = body;
 
     if (!Nombre) {
       return NextResponse.json<ApiResponse>(
@@ -180,6 +194,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Asignar permisos de configuración
+    if (PermisosConfig) {
+      await execute(
+        `INSERT INTO TR_ROL_CONFIG_PERMISO 
+         (RolId, HabilitarMenuConfig, PermisosRoles, PermisosUsuarios, PermisosListas, PermisosModulos, PermisosParametros, PermisosDashboard, PermisosParametrosAV, PermisosReportes, UsuarioCreacion)
+         VALUES (@rolId, @habilitar, @roles, @usuarios, @listas, @modulos, @parametros, @dashboard, @parametrosAV, @reportes, @usuario)`,
+        {
+          rolId: nuevoRolId,
+          habilitar: PermisosConfig.HabilitarMenuConfig ? 1 : 0,
+          roles: PermisosConfig.PermisosRoles ? 1 : 0,
+          usuarios: PermisosConfig.PermisosUsuarios ? 1 : 0,
+          listas: PermisosConfig.PermisosListas ? 1 : 0,
+          modulos: PermisosConfig.PermisosModulos ? 1 : 0,
+          parametros: PermisosConfig.PermisosParametros ? 1 : 0,
+          dashboard: PermisosConfig.PermisosDashboard ? 1 : 0,
+          parametrosAV: PermisosConfig.PermisosParametrosAV ? 1 : 0,
+          reportes: PermisosConfig.PermisosReportes ? 1 : 0,
+          usuario: user.usuario,
+        }
+      );
+    } else {
+      // Si no se proporcionan permisos de configuración, crear con todo deshabilitado
+      await execute(
+        `INSERT INTO TR_ROL_CONFIG_PERMISO 
+         (RolId, HabilitarMenuConfig, PermisosRoles, PermisosUsuarios, PermisosListas, PermisosModulos, PermisosParametros, PermisosDashboard, PermisosParametrosAV, PermisosReportes, UsuarioCreacion)
+         VALUES (@rolId, 0, 0, 0, 0, 0, 0, 0, 0, 0, @usuario)`,
+        {
+          rolId: nuevoRolId,
+          usuario: user.usuario,
+        }
+      );
+    }
+
+    // Asignar reportes
+    if (Reportes && Reportes.length > 0) {
+      for (const reporteId of Reportes) {
+        await execute(
+          `INSERT INTO TR_ROL_REPORTE (RolId, ReporteId, UsuarioAsignacion)
+           VALUES (@rolId, @reporteId, @usuario)`,
+          {
+            rolId: nuevoRolId,
+            reporteId: reporteId,
+            usuario: user.usuario,
+          }
+        );
+      }
+    }
+
     // Registrar traza
     await registrarTraza(
       user.userId,
@@ -224,7 +286,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body: any = await request.json();
-    const { Nombre, Descripcion, Estado, Permisos, AccesoTrazas, PermisosTareas } = body;
+    const { Nombre, Descripcion, Estado, Permisos, AccesoTrazas, PermisosTareas, PermisosConfig, Reportes } = body;
 
     // Construir lista de cambios para traza
     const cambios: string[] = [];
@@ -337,6 +399,88 @@ export async function PUT(request: NextRequest) {
             usuario: user.usuario,
           }
         );
+      }
+    }
+
+    // Actualizar permisos de configuración
+    if (PermisosConfig !== undefined) {
+      // Verificar si ya existen permisos de configuración para este rol
+      const existentes = await query(
+        'SELECT Id FROM TR_ROL_CONFIG_PERMISO WHERE RolId = @rolId',
+        { rolId: parseInt(id) }
+      );
+
+      if (existentes.length > 0) {
+        // Actualizar permisos existentes
+        await execute(
+          `UPDATE TR_ROL_CONFIG_PERMISO 
+           SET HabilitarMenuConfig = @habilitar,
+               PermisosRoles = @roles,
+               PermisosUsuarios = @usuarios,
+               PermisosListas = @listas,
+               PermisosModulos = @modulos,
+               PermisosParametros = @parametros,
+               PermisosDashboard = @dashboard,
+               PermisosParametrosAV = @parametrosAV,
+               PermisosReportes = @reportes
+           WHERE RolId = @rolId`,
+          {
+            rolId: parseInt(id),
+            habilitar: PermisosConfig.HabilitarMenuConfig ? 1 : 0,
+            roles: PermisosConfig.PermisosRoles ? 1 : 0,
+            usuarios: PermisosConfig.PermisosUsuarios ? 1 : 0,
+            listas: PermisosConfig.PermisosListas ? 1 : 0,
+            modulos: PermisosConfig.PermisosModulos ? 1 : 0,
+            parametros: PermisosConfig.PermisosParametros ? 1 : 0,
+            dashboard: PermisosConfig.PermisosDashboard ? 1 : 0,
+            parametrosAV: PermisosConfig.PermisosParametrosAV ? 1 : 0,
+            reportes: PermisosConfig.PermisosReportes ? 1 : 0,
+          }
+        );
+      } else {
+        // Insertar nuevos permisos
+        await execute(
+          `INSERT INTO TR_ROL_CONFIG_PERMISO 
+           (RolId, HabilitarMenuConfig, PermisosRoles, PermisosUsuarios, PermisosListas, PermisosModulos, PermisosParametros, PermisosDashboard, PermisosParametrosAV, PermisosReportes, UsuarioCreacion)
+           VALUES (@rolId, @habilitar, @roles, @usuarios, @listas, @modulos, @parametros, @dashboard, @parametrosAV, @reportes, @usuario)`,
+          {
+            rolId: parseInt(id),
+            habilitar: PermisosConfig.HabilitarMenuConfig ? 1 : 0,
+            roles: PermisosConfig.PermisosRoles ? 1 : 0,
+            usuarios: PermisosConfig.PermisosUsuarios ? 1 : 0,
+            listas: PermisosConfig.PermisosListas ? 1 : 0,
+            modulos: PermisosConfig.PermisosModulos ? 1 : 0,
+            parametros: PermisosConfig.PermisosParametros ? 1 : 0,
+            dashboard: PermisosConfig.PermisosDashboard ? 1 : 0,
+            parametrosAV: PermisosConfig.PermisosParametrosAV ? 1 : 0,
+            reportes: PermisosConfig.PermisosReportes ? 1 : 0,
+            usuario: user.usuario,
+          }
+        );
+      }
+    }
+
+    // Actualizar reportes
+    if (Reportes !== undefined) {
+      // Eliminar reportes actuales
+      await execute(
+        'DELETE FROM TR_ROL_REPORTE WHERE RolId = @rolId',
+        { rolId: parseInt(id) }
+      );
+
+      // Insertar nuevos reportes
+      if (Reportes.length > 0) {
+        for (const reporteId of Reportes) {
+          await execute(
+            `INSERT INTO TR_ROL_REPORTE (RolId, ReporteId, UsuarioAsignacion)
+             VALUES (@rolId, @reporteId, @usuario)`,
+            {
+              rolId: parseInt(id),
+              reporteId: reporteId,
+              usuario: user.usuario,
+            }
+          );
+        }
       }
     }
 

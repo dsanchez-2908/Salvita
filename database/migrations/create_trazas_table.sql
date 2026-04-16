@@ -8,8 +8,7 @@ BEGIN
         Usuario NVARCHAR(100) NOT NULL,
         Accion NVARCHAR(50) NOT NULL, -- 'Agregar', 'Modificar', 'Eliminar'
         Proceso NVARCHAR(100) NOT NULL, -- 'Roles', 'Usuarios', 'Módulos', 'Lista: Nombre', 'Módulo: Nombre'
-        Detalle NVARCHAR(MAX) NOT NULL, -- Descripción detallada de lo que se hizo
-        FOREIGN KEY (UsuarioId) REFERENCES TD_USUARIOS(Id)
+        Detalle NVARCHAR(MAX) NOT NULL -- Descripción detallada de lo que se hizo
     );
     
     CREATE INDEX IX_TD_TRAZAS_FechaHora ON TD_TRAZAS(FechaHora);

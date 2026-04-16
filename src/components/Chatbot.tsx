@@ -33,9 +33,10 @@ export default function Chatbot({ webhookUrl }: ChatbotProps) {
             footer: '',
             getStarted: 'Comenzar conversación',
             inputPlaceholder: 'Escribe tu mensaje...',
+            closeButtonTooltip: 'Cerrar',
           },
         },
-        defaultLanguage: 'en',
+        defaultLanguage:'en',
       });
     };
 

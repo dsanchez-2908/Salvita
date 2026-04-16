@@ -29,7 +29,7 @@ export async function PUT(
     const { estado, observaciones } = body;
 
     // Validar estado
-    if (!['Pendiente', 'Finalizada', 'Rechazada'].includes(estado)) {
+    if (!['Pendiente', 'Completada', 'Rechazada'].includes(estado)) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: "Estado inválido" },
         { status: 400 }
@@ -41,7 +41,7 @@ export async function PUT(
       `UPDATE TR_TAREA_REGISTRO 
        SET Estado = @estado, 
            Observaciones = @observaciones,
-           FechaFinalizacion = CASE WHEN @estado = 'Finalizada' THEN GETDATE() ELSE FechaFinalizacion END
+           FechaCompletado = CASE WHEN @estado = 'Completada' THEN GETDATE() ELSE FechaCompletado END
        WHERE Id = @tareaRegistroId AND TareaId = @tareaId`,
       {
         estado,

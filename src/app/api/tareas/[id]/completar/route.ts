@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { getUserFromRequest } from "@/lib/auth";
+import { getUserFromRequest, registrarTraza } from "@/lib/auth";
 
 interface ApiResponse {
   success: boolean;
@@ -55,6 +55,15 @@ export async function POST(
       );
     }
 
+    // Validar que el usuario puede realizar la acción
+    const puedeRealizarAccion = await verificarPuedeRealizarAccion(user.userId, tarea);
+    if (!puedeRealizarAccion) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: "Solo el usuario que tomó la tarea puede completarla" },
+        { status: 403 }
+      );
+    }
+
     // Completar la tarea
     await query(
       `
@@ -80,6 +89,23 @@ export async function POST(
         usuario: user.nombre,
         detalle: comentario || 'Tarea completada',
       }
+    );
+    
+    // Obtener datos de la tarea para la traza
+    const tareaInfo = await query(
+      `SELECT pt.Nombre as PlantillaNombre 
+       FROM TD_TAREAS t
+       INNER JOIN TD_PLANTILLA_TAREAS pt ON t.PlantillaTareaId = pt.Id
+       WHERE t.Id = @tareaId`,
+      { tareaId }
+    );
+    
+    // Registrar traza de auditoría
+    await registrarTraza(
+      user.userId,
+      'Completar',
+      'Tareas',
+      `Tarea completada - Plantilla: "${tareaInfo[0]?.PlantillaNombre || 'Desconocida'}"${comentario ? ` - Comentario: ${comentario.substring(0, 100)}` : ''}`
     );
 
     return NextResponse.json<ApiResponse>({
@@ -125,4 +151,20 @@ async function verificarAccesoTarea(userId: number, tarea: any): Promise<boolean
   }
 
   return false;
+}
+
+// Función auxiliar para verificar si el usuario puede realizar acciones sobre la tarea
+async function verificarPuedeRealizarAccion(userId: number, tarea: any): Promise<boolean> {
+  // Si la tarea está Tomada, solo quien la tomó puede realizar acciones
+  if (tarea.Estado === 'Tomada') {
+    return tarea.UsuarioTomadaPorId === userId;
+  }
+
+  // Si la tarea está Pendiente y es asignación directa a usuario, solo ese usuario puede actuar
+  if (tarea.Estado === 'Pendiente' && tarea.TipoAsignacion === 'Usuario') {
+    return tarea.UsuarioAsignadoId === userId;
+  }
+
+  // Para otros casos (ej. Pendiente en Bandeja), cualquiera con acceso puede actuar
+  return true;
 }

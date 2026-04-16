@@ -147,9 +147,9 @@ export default function DetalleRegistroV2Page() {
       }
 
       // Cargar valores de listas para el módulo principal
-      const listasIds = (moduloData.data.Campos || [])
+      const listasIds: number[] = (moduloData.data.Campos || [])
         .filter((c: Campo) => c.TipoDato === "Lista" && c.ListaId)
-        .map((c: Campo) => c.ListaId);
+        .map((c: Campo) => c.ListaId!);
 
       if (listasIds.length > 0) {
         await loadValoresListas([...new Set(listasIds)]);
@@ -161,9 +161,9 @@ export default function DetalleRegistroV2Page() {
           await loadRegistrosSecundarios(modSec.Id);
           
           // Cargar valores de listas para módulo secundario
-          const listasSecIds = (modSec.Campos || [])
+          const listasSecIds: number[] = (modSec.Campos || [])
             .filter((c: Campo) => c.TipoDato === "Lista" && c.ListaId)
-            .map((c: Campo) => c.ListaId);
+            .map((c: Campo) => c.ListaId!);
           
           if (listasSecIds.length > 0) {
             await loadValoresListas([...new Set(listasSecIds)]);
@@ -177,9 +177,9 @@ export default function DetalleRegistroV2Page() {
           await loadRegistrosAsociados(modAsoc.Id);
           
           // Cargar valores de listas para módulo asociado
-          const listasAsocIds = (modAsoc.Campos || [])
+          const listasAsocIds: number[] = (modAsoc.Campos || [])
             .filter((c: Campo) => c.TipoDato === "Lista" && c.ListaId)
-            .map((c: Campo) => c.ListaId);
+            .map((c: Campo) => c.ListaId!);
           
           if (listasAsocIds.length > 0) {
             await loadValoresListas([...new Set(listasAsocIds)]);
@@ -985,6 +985,9 @@ export default function DetalleRegistroV2Page() {
     if (value === null || value === undefined) return "-";
 
     switch (campo.TipoDato) {
+      case "IDInterno":
+        // Para IDInterno, el valor es el Id del registro
+        return value || "-";
       case "Fecha":
         return new Date(value).toLocaleDateString("es-AR");
       case "FechaHora":
@@ -1074,7 +1077,7 @@ export default function DetalleRegistroV2Page() {
                   : `Registro #${registroId}`
               )}
             </h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">Detalle de {modulo.Nombre.toLowerCase()}</p>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Detalle de {modulo?.Nombre.toLowerCase()}</p>
             {registro && (
               <div className="flex gap-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
                 {registro.FechaCreacion && (
@@ -1229,7 +1232,7 @@ export default function DetalleRegistroV2Page() {
                   </div>
                   <form onSubmit={(e) => handleSubmitSecundario(e, moduloSec.Id)} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {moduloSec.Campos.filter(c => c.Visible).map((campo) => (
+                      {moduloSec.Campos.filter(c => c.Visible && c.TipoDato !== "IDInterno").map((campo) => (
                         <div key={campo.Id}>
                           <Label htmlFor={campo.Nombre} className="dark:text-gray-300">
                             {campo.Nombre}

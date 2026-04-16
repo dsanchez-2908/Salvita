@@ -67,8 +67,10 @@ export async function PUT(
       }
     });
 
-    // Construir query de actualización (sin FKs)
-    const setClauses = campos.map((c: any) => `[${c.NombreColumna}] = @${c.NombreColumna}`).join(', ');
+    // Construir query de actualización (sin FKs ni campos IDInterno)
+    // Excluir campos tipo IDInterno (no se pueden actualizar, apuntan a la columna Id que es IDENTITY)
+    const camposActualizables = campos.filter((c: any) => c.TipoDato !== 'IDInterno');
+    const setClauses = camposActualizables.map((c: any) => `[${c.NombreColumna}] = @${c.NombreColumna}`).join(', ');
 
     const updateQuery = `
       UPDATE [${modulo.NombreTabla}] 
@@ -81,8 +83,8 @@ export async function PUT(
     const pool = await getConnection();
     const request_db = pool.request();
 
-    // Agregar parámetros de campos configurados
-    campos.forEach((campo: any) => {
+    // Agregar parámetros de campos configurados (excluir IDInterno)
+    camposActualizables.forEach((campo: any) => {
       const valor = body[campo.Nombre];
       
       switch (campo.TipoDato) {

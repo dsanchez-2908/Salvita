@@ -59,8 +59,8 @@ export async function POST(
     await query(
       `
       UPDATE TD_TAREAS 
-      SET Estado = 'Finalizada', 
-          FechaFinalizacion = GETDATE()
+      SET Estado = 'Completada', 
+          FechaCompletado = GETDATE()
       WHERE Id = @tareaId
       `,
       { tareaId }

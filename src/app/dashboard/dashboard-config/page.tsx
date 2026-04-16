@@ -30,15 +30,18 @@ interface ConfigWidget {
   Tipo: "Modulos" | "Tareas";
   ModuloId: number;
   ModuloNombre: string;
-  TipoVisualizacion: "Agrupamiento" | "DetalleFiltrado" | "Totalizado";
+  TipoVisualizacion: "Agrupamiento" | "DetalleFiltrado" | "Totalizado" | "Grafico";
   CampoAgrupamiento: string | null;
   CampoFiltro: string | null;
   ValorFiltro: string | null;
   FiltroOperador: string | null;
   FiltroActivo: boolean;
+  // Campos específicos para Gráficos
+  TipoGrafico: "Torta" | "Barras" | null;
   // Campos específicos para Tareas
   TareasTipoVisualizacion: "PendientesPropios" | "PendientesTotales" | null;
   TareasCategoria: "BandejaPersonal" | "BandejasGrupal" | null;
+  TareasMostrarComo: "Cantidades" | "Grafico" | null;
 }
 
 interface ValorLista {
@@ -177,9 +180,11 @@ export default function DashboardConfigPage() {
           ValorFiltro: config.ValorFiltro || null,
           FiltroOperador: config.FiltroOperador || '=',
           FiltroActivo: config.FiltroActivo || false,
+          TipoGrafico: config.TipoGrafico || null,
           // Campos de Tareas
           TareasTipoVisualizacion: config.TareasTipoVisualizacion || null,
           TareasCategoria: config.TareasCategoria || null,
+          TareasMostrarComo: config.TareasMostrarComo || null,
         }));
         setWidgets(widgetsExistentes);
       } else {
@@ -202,8 +207,10 @@ export default function DashboardConfigPage() {
       ValorFiltro: null,
       FiltroOperador: "=",
       FiltroActivo: false,
+      TipoGrafico: null,
       TareasTipoVisualizacion: null,
       TareasCategoria: null,
+      TareasMostrarComo: null,
     };
     setWidgets([...widgets, nuevoWidget]);
   };
@@ -218,7 +225,9 @@ export default function DashboardConfigPage() {
           if (valor === "Modulos") {
             updated.TareasTipoVisualizacion = null;
             updated.TareasCategoria = null;
+            updated.TareasMostrarComo = null;
             updated.TipoVisualizacion = "Agrupamiento";
+            updated.TipoGrafico = null;
           } else if (valor === "Tareas") {
             updated.ModuloId = 0;
             updated.ModuloNombre = "";
@@ -226,8 +235,10 @@ export default function DashboardConfigPage() {
             updated.CampoFiltro = null;
             updated.ValorFiltro = null;
             updated.TipoVisualizacion = "Agrupamiento";
+            updated.TipoGrafico = null;
             updated.TareasTipoVisualizacion = "PendientesPropios";
             updated.TareasCategoria = "BandejaPersonal";
+            updated.TareasMostrarComo = "Cantidades";
           }
         }
         
@@ -250,6 +261,12 @@ export default function DashboardConfigPage() {
           updated.CampoAgrupamiento = null;
           updated.CampoFiltro = null;
           updated.ValorFiltro = null;
+          // Si cambia a Grafico, inicializar TipoGrafico
+          if (valor === "Grafico") {
+            updated.TipoGrafico = "Torta";
+          } else {
+            updated.TipoGrafico = null;
+          }
         }
         
         return updated;
@@ -366,6 +383,24 @@ export default function DashboardConfigPage() {
           return;
         }
 
+        if (widget.TipoVisualizacion === "Grafico" && !widget.TipoGrafico) {
+          toast({
+            title: "Error",
+            description: `El widget de ${widget.ModuloNombre} tipo Gráfico debe tener un tipo de gráfico seleccionado`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (widget.TipoVisualizacion === "Grafico" && !widget.CampoAgrupamiento) {
+          toast({
+            title: "Error",
+            description: `El widget de ${widget.ModuloNombre} tipo Gráfico debe tener un campo de agrupamiento seleccionado`,
+            variant: "destructive",
+          });
+          return;
+        }
+
         if (widget.FiltroActivo && (!widget.CampoFiltro || !widget.ValorFiltro)) {
           toast({
             title: "Error",
@@ -382,6 +417,15 @@ export default function DashboardConfigPage() {
           toast({
             title: "Error",
             description: "Los widgets de tareas deben tener tipo de visualización y categoría seleccionados",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (widget.TareasMostrarComo === "Grafico" && !widget.TipoGrafico) {
+          toast({
+            title: "Error",
+            description: "Los widgets de tareas con visualización de gráfico deben tener un tipo de gráfico seleccionado",
             variant: "destructive",
           });
           return;
@@ -411,9 +455,13 @@ export default function DashboardConfigPage() {
             ValorFiltro: w.Tipo === "Modulos" ? w.ValorFiltro : null,
             FiltroOperador: w.Tipo === "Modulos" ? (w.FiltroOperador || '=') : null,
             FiltroActivo: w.Tipo === "Modulos" ? (w.FiltroActivo || false) : null,
+            TipoGrafico: (w.Tipo === "Modulos" && w.TipoVisualizacion === "Grafico") || 
+                         (w.Tipo === "Tareas" && w.TareasMostrarComo === "Grafico") 
+                         ? w.TipoGrafico : null,
             // Campos para widgets de Tareas
             TareasTipoVisualizacion: w.Tipo === "Tareas" ? w.TareasTipoVisualizacion : null,
             TareasCategoria: w.Tipo === "Tareas" ? w.TareasCategoria : null,
+            TareasMostrarComo: w.Tipo === "Tareas" ? w.TareasMostrarComo : null,
           })),
         }),
       });
@@ -588,6 +636,7 @@ export default function DashboardConfigPage() {
                                     <option value="Agrupamiento">Agrupamiento</option>
                                     <option value="DetalleFiltrado">Detalle Filtrado</option>
                                     <option value="Totalizado">Totalizado</option>
+                                    <option value="Grafico">Gráfico</option>
                               </select>
                             </div>
                           </div>
@@ -622,6 +671,136 @@ export default function DashboardConfigPage() {
                                     className="h-4 w-4"
                                   />
                                   <Label htmlFor={`filtro-${widget.id}`} className="font-normal">
+                                    Aplicar filtro opcional
+                                  </Label>
+                                </div>
+
+                                {widget.FiltroActivo && (
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pl-6 border-l-2">
+                                    <div className="space-y-2">
+                                      <Label className="text-sm">Campo</Label>
+                                      <select
+                                        value={widget.CampoFiltro || ""}
+                                        onChange={(e) => {
+                                          actualizarWidget(widget.id, "CampoFiltro", e.target.value);
+                                          actualizarWidget(widget.id, "ValorFiltro", null);
+                                        }}
+                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                      >
+                                        <option value="">Seleccione...</option>
+                                        {getCamposPorTipo(widget.ModuloId).map((campo) => (
+                                          <option key={campo.Nombre} value={campo.Nombre}>
+                                            {campo.Nombre}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label className="text-sm">Operador</Label>
+                                      <select
+                                        value={widget.FiltroOperador || "="}
+                                        onChange={(e) => actualizarWidget(widget.id, "FiltroOperador", e.target.value)}
+                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                      >
+                                        <option value="=">=</option>
+                                        <option value="<>">≠</option>
+                                        <option value="<">&lt;</option>
+                                        <option value=">">&gt;</option>
+                                        <option value="<=">≤</option>
+                                        <option value=">=">≥</option>
+                                      </select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label className="text-sm">Valor</Label>
+                                      {(() => {
+                                        const campo = getCamposPorTipo(widget.ModuloId).find(
+                                          c => c.Nombre === widget.CampoFiltro
+                                        );
+                                        
+                                        if (campo?.ListaId && valoresLista[campo.ListaId]) {
+                                          return (
+                                            <select
+                                              value={widget.ValorFiltro || ""}
+                                              onChange={(e) => actualizarWidget(widget.id, "ValorFiltro", e.target.value)}
+                                              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                            >
+                                              <option value="">Seleccione...</option>
+                                              {valoresLista[campo.ListaId].map((valor) => (
+                                                <option key={valor.Id} value={valor.Valor}>
+                                                  {valor.Valor}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          );
+                                        }
+                                        
+                                        return (
+                                          <input
+                                            type="text"
+                                            value={widget.ValorFiltro || ""}
+                                            onChange={(e) => actualizarWidget(widget.id, "ValorFiltro", e.target.value)}
+                                            placeholder="Valor"
+                                            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                            disabled={!widget.CampoFiltro}
+                                          />
+                                        );
+                                      })()}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
+
+                          {widget.ModuloId && widget.TipoVisualizacion === "Grafico" && (
+                            <>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label>Campo de Agrupamiento</Label>
+                                  <select
+                                    value={widget.CampoAgrupamiento || ""}
+                                    onChange={(e) =>
+                                      actualizarWidget(widget.id, "CampoAgrupamiento", e.target.value)
+                                    }
+                                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                  >
+                                    <option value="">Seleccione un campo...</option>
+                                    {getCamposPorTipo(widget.ModuloId).map((campo) => (
+                                      <option key={campo.Nombre} value={campo.Nombre}>
+                                        {campo.Nombre}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label>Tipo de Gráfico</Label>
+                                  <select
+                                    value={widget.TipoGrafico || ""}
+                                    onChange={(e) =>
+                                      actualizarWidget(widget.id, "TipoGrafico", e.target.value)
+                                    }
+                                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                  >
+                                    <option value="">Seleccione tipo...</option>
+                                    <option value="Torta">Torta</option>
+                                    <option value="Barras">Barras</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="border-t pt-4 space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="checkbox"
+                                    id={`filtro-grafico-${widget.id}`}
+                                    checked={widget.FiltroActivo}
+                                    onChange={(e) => actualizarWidget(widget.id, "FiltroActivo", e.target.checked)}
+                                    className="h-4 w-4"
+                                  />
+                                  <Label htmlFor={`filtro-grafico-${widget.id}`} className="font-normal">
                                     Aplicar filtro opcional
                                   </Label>
                                 </div>
@@ -904,7 +1083,7 @@ export default function DashboardConfigPage() {
                           {/* Campos para Widgets de Tareas */}
                           {widget.Tipo === "Tareas" && (
                             <div className="space-y-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="space-y-2">
                                   <Label>Tipo de Visualización</Label>
                                   <select
@@ -934,7 +1113,40 @@ export default function DashboardConfigPage() {
                                     <option value="BandejasGrupal">Bandejas Grupal</option>
                                   </select>
                                 </div>
+
+                                <div className="space-y-2">
+                                  <Label>Mostrar</Label>
+                                  <select
+                                    value={widget.TareasMostrarComo || ""}
+                                    onChange={(e) =>
+                                      actualizarWidget(widget.id, "TareasMostrarComo", e.target.value)
+                                    }
+                                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                  >
+                                    <option value="">Seleccione...</option>
+                                    <option value="Cantidades">Cantidades</option>
+                                    <option value="Grafico">Gráfico</option>
+                                  </select>
+                                </div>
                               </div>
+
+                              {/* Selector de Tipo de Gráfico si se selecciona Mostrar como Gráfico */}
+                              {widget.TareasMostrarComo === "Grafico" && (
+                                <div className="space-y-2">
+                                  <Label>Tipo de Gráfico</Label>
+                                  <select
+                                    value={widget.TipoGrafico || ""}
+                                    onChange={(e) =>
+                                      actualizarWidget(widget.id, "TipoGrafico", e.target.value)
+                                    }
+                                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                  >
+                                    <option value="">Seleccione tipo...</option>
+                                    <option value="Torta">Torta</option>
+                                    <option value="Barras">Barras</option>
+                                  </select>
+                                </div>
+                              )}
 
                               {/* Descripción del widget según configuración */}
                               {widget.TareasTipoVisualizacion && widget.TareasCategoria && (

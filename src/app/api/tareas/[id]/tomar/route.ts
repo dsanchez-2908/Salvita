@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { getUserFromRequest } from "@/lib/auth";
+import { getUserFromRequest, registrarTraza } from "@/lib/auth";
 
 interface ApiResponse {
   success: boolean;
@@ -101,6 +101,24 @@ export async function POST(
         userId: user.userId,
         usuario: user.nombre,
       }
+    );
+    
+    // Obtener datos de la tarea para la traza
+    const tareaInfo = await query(
+      `SELECT pt.Nombre as PlantillaNombre, b.Nombre as BandejaNombre 
+       FROM TD_TAREAS t
+       INNER JOIN TD_PLANTILLA_TAREAS pt ON t.PlantillaTareaId = pt.Id
+       LEFT JOIN TD_BANDEJAS b ON t.BandejaAsignadaId = b.Id
+       WHERE t.Id = @tareaId`,
+      { tareaId }
+    );
+    
+    // Registrar traza de auditoría
+    await registrarTraza(
+      user.userId,
+      'Tomar',
+      'Tareas',
+      `Tarea tomada - Plantilla: "${tareaInfo[0]?.PlantillaNombre || 'Desconocida'}" - Bandeja: "${tareaInfo[0]?.BandejaNombre || 'Desconocida'}"`
     );
 
     return NextResponse.json<ApiResponse>({
